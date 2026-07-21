@@ -1,25 +1,43 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Eye, X, Trash2, Sparkles, LayoutGrid, LayoutList, Calendar, FileText, Pencil } from 'lucide-react'
-import { mockQuotations, mockBrands } from '@/lib/mock-data'
+import { mockQuotations } from '@/lib/mock-data'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
+import { usePermissions } from '@/hooks/usePermissions'
 
 export default function QuotationListPage() {
   const navigate = useNavigate()
+  const { hasPermission } = usePermissions()
+  const hasQuoCreate = hasPermission('quo_create')
+  const hasQuoEdit = hasPermission('quo_edit')
+  const hasQuoDelete = hasPermission('quo_delete')
+  
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('ALL')
 
-  // List quotations state initialized with mockQuotations
-  const [quotations, setQuotations] = useState(mockQuotations)
+  const queryClient = useQueryClient()
+  
+  const { data: quotations = [], isLoading } = useQuery({
+    queryKey: ['quotations'],
+    queryFn: () => api<any[]>('/finance/quotations')
+  })
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api<any[]>('/users')
+  })
   const [view, setView] = useState<'table' | 'grid'>('grid')
 
-  // Drawer Form State
   const [isOpen, setIsOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [brandId, setBrandId] = useState(mockBrands[0].id)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
   const [note, setNote] = useState('')
   const [status, setStatus] = useState<'DRAFT' | 'TERKIRIM'>('DRAFT')
   const [items, setItems] = useState<Array<{
@@ -34,7 +52,9 @@ export default function QuotationListPage() {
 
   const openCreateDrawer = () => {
     setEditingId(null)
-    setBrandId(mockBrands[0].id)
+    setSelectedUserId(null)
+    setTitle('')
+    setDescription('')
     setStatus('DRAFT')
     setItems([{ id: '1', name: 'Instagram Reels', qty: 1, unit: 'video', price: 1500000 }])
     setNote('')
@@ -43,16 +63,18 @@ export default function QuotationListPage() {
 
   const openEditDrawer = (q: typeof quotations[0]) => {
     setEditingId(q.id)
-    setBrandId(q.brandId)
+    setSelectedUserId(q.userAccess?.[0]?.userId || null)
+    setTitle(q.title || '')
+    setDescription(q.description || '')
     setStatus(q.status as any)
     setItems([...q.items])
     setNote(q.note || '')
     setIsOpen(true)
   }
 
-  // Filtered quotations based on search & status filter
   const filtered = quotations.filter((q) => {
-    const matchSearch = q.number.toLowerCase().includes(search.toLowerCase()) || q.brand.name.toLowerCase().includes(search.toLowerCase())
+    const matchSearch = (q.number || '').toLowerCase().includes(search.toLowerCase()) || 
+                        (q.brand?.name || '').toLowerCase().includes(search.toLowerCase())
     const matchStatus = filterStatus === 'ALL' || q.status === filterStatus
     return matchSearch && matchStatus
   })
@@ -92,6 +114,52 @@ export default function QuotationListPage() {
   }
 
   // Form submission handler
+  const saveMutation = useMutation({
+    mutationFn: (data: any) => api('/finance/quotations', { method: 'POST', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      setEditingId(null)
+      setSelectedUserId(null)
+      setTitle('')
+      setDescription('')
+      setItems([{ id: '1', name: 'Instagram Reels', qty: 1, unit: 'video', price: 1500000 }])
+      setNote('')
+      setStatus('DRAFT')
+      setIsOpen(false)
+    },
+    onError: (err: any) => {
+      alert('Gagal menyimpan quotation: ' + err.message)
+    }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api(`/finance/quotations/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+    },
+    onError: (err: any) => {
+      alert('Gagal menghapus quotation: ' + err.message)
+    }
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string, data: any }) => api(`/finance/quotations/${id}`, { method: 'PATCH', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      setEditingId(null)
+      setSelectedUserId(null)
+      setTitle('')
+      setDescription('')
+      setItems([{ id: '1', name: 'Instagram Reels', qty: 1, unit: 'video', price: 1500000 }])
+      setNote('')
+      setStatus('DRAFT')
+      setIsOpen(false)
+    },
+    onError: (err: any) => {
+      alert('Gagal memperbarui quotation: ' + err.message)
+    }
+  })
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
     if (items.length === 0) {
@@ -99,7 +167,6 @@ export default function QuotationListPage() {
       return
     }
 
-    const brand = mockBrands.find(b => b.id === brandId) || mockBrands[0]
     const quotationItems = items.map((item, idx) => ({
       id: item.id.startsWith('qi-') ? item.id : `qi-${Date.now()}-${idx}`,
       name: item.name || 'Jasa Kampanye',
@@ -112,56 +179,38 @@ export default function QuotationListPage() {
     const subtotal = calculateTotal(items)
 
     if (editingId) {
-      const updated = quotations.map(q => {
-        if (q.id === editingId) {
-          return {
-            ...q,
-            brandId,
-            brand,
-            items: quotationItems,
-            total: subtotal,
-            status: status as any,
-            note: note || undefined,
-            sentAt: status === 'TERKIRIM' && !q.sentAt ? new Date().toISOString().split('T')[0] : q.sentAt
-          }
+      updateMutation.mutate({
+        id: editingId,
+        data: {
+          title: title || undefined,
+          description: description || undefined,
+          items: quotationItems,
+          total: subtotal,
+          status,
+          note,
+          userId: selectedUserId || undefined
         }
-        return q
       })
-      setQuotations(updated)
     } else {
       const now = new Date()
       const d = String(now.getDate()).padStart(2, '0')
       const m = String(now.getMonth() + 1).padStart(2, '0')
       const y = now.getFullYear()
       const todayStr = now.toISOString().split('T')[0]
-      
-      const countToday = quotations.filter(q => q.createdAt === todayStr).length + 1
-      const seq = String(countToday).padStart(4, '0')
-      const nextQuotationNumber = `QUO-${d}-${m}-${y}-${seq}`
 
-      const newQuotation = {
-        id: `q-${Date.now()}`,
-        number: nextQuotationNumber,
-        brandId,
-        brand,
+      saveMutation.mutate({
+        number: `QUO-BMSC-${Date.now().toString().slice(-4)}`,
+        brandId: null,
+        userId: selectedUserId || null,
+        title: title || undefined,
+        description: description || undefined,
         items: quotationItems,
         total: subtotal,
-        status: status as any,
-        note: note || undefined,
-        createdAt: todayStr,
-        sentAt: status === 'TERKIRIM' ? todayStr : undefined
-      }
-
-      setQuotations([newQuotation, ...quotations])
+        status,
+        note,
+        sentAt: status !== 'DRAFT' ? todayStr : undefined
+      })
     }
-    
-    // Reset Form & Close Drawer
-    setEditingId(null)
-    setBrandId(mockBrands[0].id)
-    setItems([{ id: '1', name: 'Instagram Reels', qty: 1, unit: 'video', price: 1500000 }])
-    setNote('')
-    setStatus('DRAFT')
-    setIsOpen(false)
   }
 
   return (
@@ -192,6 +241,7 @@ export default function QuotationListPage() {
               <LayoutList className="h-4 w-4" />
             </button>
           </div>
+          {hasQuoCreate && (
           <Button 
             id="add-quotation-btn" 
             icon={<Plus className="h-4 w-4" />}
@@ -200,6 +250,7 @@ export default function QuotationListPage() {
           >
             Buat Quotation
           </Button>
+          )}
         </div>
       </div>
 
@@ -239,7 +290,7 @@ export default function QuotationListPage() {
               {filtered.map((q) => (
                 <tr key={q.id} className="hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => navigate(`/invoice/quotation/${q.id}`)}>
                   <td className="px-5 py-3.5 font-mono text-xs font-medium">{q.number}</td>
-                  <td className="px-4 py-3.5"><span className="text-sm">{q.brand.name}</span></td>
+                  <td className="px-4 py-3.5"><span className="text-sm">{q.brand?.name || q.userAccess?.[0]?.user?.name || '-'}</span></td>
                   <td className="px-4 py-3.5 text-muted-foreground text-xs">{q.items.length} item</td>
                   <td className="px-4 py-3.5 font-semibold">{formatCurrency(q.total)}</td>
                   <td className="px-4 py-3.5"><StatusBadge status={q.status} size="sm" /></td>
@@ -252,12 +303,22 @@ export default function QuotationListPage() {
                       >
                         <Eye className="h-3.5 w-3.5" />
                       </button>
+                      {hasQuoEdit && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); openEditDrawer(q); }}
                         className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
+                      )}
+                      {hasQuoDelete && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); if(confirm('Yakin ingin menghapus quotation ini?')) deleteMutation.mutate(q.id); }}
+                        className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-red-50 transition-colors text-muted-foreground hover:text-red-500"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -279,7 +340,7 @@ export default function QuotationListPage() {
               <div className="p-4 flex-1">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{q.brand.name}</span>
+                    <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">{q.brand?.name || q.userAccess?.[0]?.user?.name || '-'}</span>
                     <h3 className="font-bold text-sm font-mono text-foreground">{q.number}</h3>
                   </div>
                   <StatusBadge status={q.status} size="sm" />
@@ -308,12 +369,22 @@ export default function QuotationListPage() {
                   >
                     <Eye className="h-3.5 w-3.5" />
                   </button>
+                  {hasQuoEdit && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); openEditDrawer(q); }}
                     className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white transition-colors text-muted-foreground shadow-sm"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
+                  )}
+                  {hasQuoDelete && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); if(confirm('Yakin ingin menghapus quotation ini?')) deleteMutation.mutate(q.id); }}
+                    className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-red-50 transition-colors text-muted-foreground hover:text-red-500 shadow-sm"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                  )}
                 </div>
               </div>
             </Card>
@@ -364,18 +435,6 @@ export default function QuotationListPage() {
             <h3 className="text-xs font-bold text-orange-600 uppercase tracking-widest">Informasi Client & Status</h3>
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase">Pilih Brand</label>
-                <select 
-                  value={brandId} 
-                  onChange={(e) => setBrandId(e.target.value)}
-                  className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                >
-                  {mockBrands.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name} ({b.email})</option>
-                  ))}
-                </select>
-              </div>
-              <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase">Status Awal</label>
                 <div className="flex bg-gray-100 rounded-lg p-1 h-10">
                   <button
@@ -398,7 +457,63 @@ export default function QuotationListPage() {
                   >
                     TERKIRIM
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatus('DISETUJUI')}
+                    className={cn(
+                      "flex-1 text-xs font-bold rounded-md transition-all",
+                      status === 'DISETUJUI' ? "bg-white text-orange-600 shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    DISETUJUI
+                  </button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <hr className="border-border/60" />
+
+          {/* Section 2: Pemetaan Akses & Detail Kampanye */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-orange-600 uppercase tracking-widest">Detail Kampanye & Akses</h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              {!editingId && (
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase">Pilih User (Opsional)</label>
+                  <select 
+                    value={selectedUserId || ''} 
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  >
+                    <option value="">-- Bebas (Pilih Nanti) --</option>
+                    {users.map((u: any) => (
+                      <option key={u.id} value={u.id}>{u.name} {u.role === 'BRAND' ? `(Klien: ${u.brand?.name || '-'})` : ''}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-muted-foreground mt-1.5">Otomatis melampirkan identitas Brand-nya.</p>
+                </div>
+              )}
+              
+              <div className={!editingId ? "" : "md:col-span-2"}>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase">Judul Kampanye (Opsional)</label>
+                <input
+                  type="text"
+                  placeholder="KLIEN MARKETING CAMPAIGN"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase">Deskripsi Kampanye (Opsional)</label>
+                <textarea
+                  placeholder="Rencana anggaran & usulan penawaran untuk kampanye influencer."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full min-h-[60px] p-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-y"
+                />
               </div>
             </div>
           </div>
@@ -542,6 +657,7 @@ export default function QuotationListPage() {
             <Button 
               type="submit" 
               className="bg-orange-600 hover:bg-orange-700 text-white border-0 shadow-md shadow-orange-600/20"
+              loading={saveMutation.isPending}
             >
               Simpan Quotation
             </Button>

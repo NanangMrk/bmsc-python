@@ -1,11 +1,15 @@
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, Search, FolderKanban, X, Check } from 'lucide-react'
-import { mockUsers, mockProjects, mockQuotations } from '@/lib/mock-data'
+import { Plus, Pencil, Trash2, Search, FolderKanban, X, Check, Users } from 'lucide-react'
+import { mockProjects, mockQuotations } from '@/lib/mock-data'
 import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Card } from '@/components/ui/Card'
 import { formatDateShort } from '@/lib/utils'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import { api } from '@/lib/api'
+import { formatCurrency } from '@/lib/utils'
 
 const roleLabels: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
@@ -16,6 +20,7 @@ const roleLabels: Record<string, string> = {
 }
 
 export default function UsersPage() {
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState('ALL')
   const [mappingUser, setMappingUser] = useState<any>(null)
@@ -23,12 +28,186 @@ export default function UsersPage() {
   const [selectedProjects, setSelectedProjects] = useState<string[]>([])
   const [selectedQuotations, setSelectedQuotations] = useState<string[]>([])
   
+  // Add User State
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newUserCompanyName, setNewUserCompanyName] = useState('')
+  const [newUserUsername, setNewUserUsername] = useState('')
+  const [newUserPicName, setNewUserPicName] = useState('')
+  const [newUserPhone, setNewUserPhone] = useState('')
+  const [newUserEmail, setNewUserEmail] = useState('')
+  const [newUserPassword, setNewUserPassword] = useState('')
+  const [newUserAddress, setNewUserAddress] = useState('')
+  const [newUserRoleId, setNewUserRoleId] = useState('')
+  const [newUserBrandId, setNewUserBrandId] = useState('')
+
+  // Edit User State
+  const [editingUser, setEditingUser] = useState<any>(null)
+  const [editUserName, setEditUserName] = useState('')
+  const [editUserEmail, setEditUserEmail] = useState('')
+  const [editUserPhone, setEditUserPhone] = useState('')
+  const [editUserPassword, setEditUserPassword] = useState('')
+  const [editUserRoleId, setEditUserRoleId] = useState('')
+
+  const { data: rawUsers = [], isLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api<any[]>('/users')
+  })
+
+  const { data: roles = [] } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => api<any[]>('/roles')
+  })
+
+  const { data: brands = [] } = useQuery({
+    queryKey: ['brands'],
+    queryFn: () => api<any[]>('/brands')
+  })
+
+  const { data: realProjects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api<any[]>('/projects')
+  })
+
+  const { data: realQuotations = [] } = useQuery({
+    queryKey: ['quotations'],
+    queryFn: () => api<any[]>('/finance/quotations')
+  })
+
+  // Format backend user to match UI
+  const mockUsers = rawUsers.map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role?.name?.toUpperCase().replace(' ', '_') || 'BRAND',
+    brandName: u.brand?.name,
+    createdAt: u.createdAt,
+    isActive: u.isActive,
+    projectAccess: u.projectAccess?.map((p: any) => p.projectId) || [],
+    quotationAccess: u.quotationAccess?.map((q: any) => q.quotationId) || [],
+    invoiceAccess: u.invoiceAccess?.map((i: any) => i.invoiceId) || []
+  }))
+
+  const createUserMutation = useMutation({
+    mutationFn: (data: any) => api('/users', { method: 'POST', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setShowAddModal(false)
+      setNewUserCompanyName('')
+      setNewUserUsername('')
+      setNewUserPicName('')
+      setNewUserPhone('')
+      setNewUserEmail('')
+      setNewUserPassword('')
+      setNewUserAddress('')
+      setNewUserRoleId('')
+      setNewUserBrandId('')
+    },
+    onError: (err: any) => {
+      alert('Gagal membuat user: ' + err.message)
+    }
+  })
+
+  const updateAccessMutation = useMutation({
+    mutationFn: (data: { userId: string, projectIds: string[], quotationIds: string[], invoiceIds: string[] }) => 
+      api(`/users/${data.userId}/access`, { method: 'POST', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      alert('Mapping akses berhasil disimpan!')
+      setMappingUser(null)
+    },
+    onError: (err: any) => {
+      alert('Gagal menyimpan akses: ' + err.message)
+    }
+  })
+
+  const updateUserMutation = useMutation({
+    mutationFn: (data: any) => api(`/users/${data.id}`, { method: 'PUT', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setEditingUser(null)
+    },
+    onError: (err: any) => {
+      alert('Gagal mengupdate user: ' + err.message)
+    }
+  })
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: string) => api(`/users/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (err: any) => {
+      alert('Gagal menghapus user: ' + err.message)
+    }
+  })
+
+  const handleAddUser = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newUserCompanyName || !newUserUsername || !newUserPassword || !newUserRoleId) {
+      alert('Mohon lengkapi data wajib (Perusahaan, Username, Password, Role)')
+      return
+    }
+    
+    // Check if role is brand
+    const selectedRole = roles.find((r: any) => r.id === newUserRoleId)
+    if (selectedRole?.name === 'Brand' && !newUserBrandId) {
+      alert('Untuk Role Brand, silakan pilih brand yang akan direlasikan')
+      return
+    }
+
+    createUserMutation.mutate({
+      companyName: newUserCompanyName,
+      username: newUserUsername,
+      picName: newUserPicName,
+      phone: newUserPhone,
+      address: newUserAddress,
+      email: newUserEmail,
+      password: newUserPassword,
+      roleId: newUserRoleId,
+      brandId: newUserBrandId || undefined
+    })
+  }
+
   const toggleProject = (id: string) => {
     setSelectedProjects(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   const toggleQuotation = (id: string) => {
     setSelectedQuotations(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const handleOpenEditUser = (user: any) => {
+    // Find the raw user to get roleId
+    const rawUser = rawUsers.find((u: any) => u.id === user.id)
+    setEditingUser(user)
+    setEditUserName(rawUser?.name || '')
+    setEditUserEmail(rawUser?.email || '')
+    setEditUserPhone(rawUser?.phone || '')
+    setEditUserPassword('')
+    setEditUserRoleId(rawUser?.roleId || '')
+  }
+
+  const handleSaveEditUser = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editUserName.trim() || !editUserRoleId) {
+      alert('Nama dan role wajib diisi')
+      return
+    }
+    updateUserMutation.mutate({
+      id: editingUser.id,
+      name: editUserName,
+      email: editUserEmail,
+      phone: editUserPhone,
+      roleId: editUserRoleId,
+      ...(editUserPassword ? { password: editUserPassword } : {})
+    })
+  }
+
+  const handleDeleteUser = (user: any) => {
+    if (confirm(`Yakin ingin menghapus user "${user.name}"? Tindakan ini tidak dapat dibatalkan.`)) {
+      deleteUserMutation.mutate(user.id)
+    }
   }
 
   const filtered = mockUsers.filter((u) => {
@@ -39,12 +218,35 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Kelola User</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-foreground">
+            <Users className="h-6 w-6 text-orange-600" />
+            Kelola User & Hak Akses Role
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1 max-w-2xl">
+            Daftarkan akun administrator / brand, batasi akses ke project tertentu, dan atur matriks izin tindakan secara mendalam.
+          </p>
+        </div>
+        
+        {/* Toggle Tabs */}
+        <div className="flex items-center bg-gray-100/80 p-1 rounded-lg border border-border/50">
+          <button className="px-4 py-1.5 text-sm font-bold text-orange-600 bg-white rounded-md shadow-sm border border-border/40">
+            Daftar User
+          </button>
+          <Link to="/roles" className="px-4 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground rounded-md transition-colors inline-block">
+            Matriks Hak Akses (Permissions)
+          </Link>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mt-4">
+        <div>
+          <h2 className="text-lg font-bold">Daftar User</h2>
           <p className="text-muted-foreground text-sm mt-0.5">{filtered.length} dari {mockUsers.length} user</p>
         </div>
-        <Button id="add-user-btn" icon={<Plus className="h-4 w-4" />}>Tambah User</Button>
+        <Button id="add-user-btn" icon={<Plus className="h-4 w-4" />} onClick={() => setShowAddModal(true)}>Tambah User</Button>
       </div>
 
       {/* Stats */}
@@ -82,6 +284,7 @@ export default function UsersPage() {
               <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">User</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Email</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Role</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Brand Terkait</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Bergabung</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Aksi</th>
             </tr>
@@ -99,20 +302,33 @@ export default function UsersPage() {
                 <td className="px-4 py-3.5">
                   <StatusBadge status={user.role as string} size="sm" className="bg-muted text-muted-foreground border-transparent" />
                 </td>
+                <td className="px-4 py-3.5 text-xs">
+                  {user.brandName ? <span className="font-bold text-orange-600">{user.brandName}</span> : <span className="text-muted-foreground italic">-</span>}
+                </td>
                 <td className="px-4 py-3.5 text-xs text-muted-foreground">{formatDateShort(user.createdAt)}</td>
                 <td className="px-4 py-3.5">
                   <div className="flex items-center gap-1">
                     <button 
-                      onClick={() => setMappingUser(user)}
+                      onClick={() => {
+                        setMappingUser(user)
+                        setSelectedProjects(user.projectAccess)
+                        setSelectedQuotations(user.quotationAccess)
+                      }}
                       className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-orange-50 hover:text-orange-500 transition-colors"
                       title="Mapping Project"
                     >
                       <FolderKanban className="h-3.5 w-3.5" />
                     </button>
-                    <button className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Edit User">
+                    <button 
+                      onClick={() => handleOpenEditUser(user)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Edit User"
+                    >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
-                    <button className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors" title="Hapus User">
+                    <button 
+                      onClick={() => handleDeleteUser(user)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors" title="Hapus User"
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -161,7 +377,7 @@ export default function UsersPage() {
                   <div className="text-xs font-medium text-muted-foreground mb-4">
                     Pilih project yang diizinkan untuk diakses oleh <span className="font-bold text-foreground">{mappingUser.name}</span>.
                   </div>
-                  {mockProjects.map(proj => {
+                  {realProjects.map(proj => {
                     const isSelected = selectedProjects.includes(proj.id)
                     return (
                       <label 
@@ -175,7 +391,7 @@ export default function UsersPage() {
                         <div>
                           <div className="text-sm font-bold text-foreground mb-1">{proj.name}</div>
                           <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                            {proj.brand.name} • {proj.status}
+                            {proj.brand?.name || '-'} • {proj.status}
                           </div>
                         </div>
                       </label>
@@ -188,7 +404,7 @@ export default function UsersPage() {
                     Pilih Quotation yang dapat diakses oleh <span className="font-bold text-foreground">{mappingUser.name}</span>. 
                     <br/><span className="text-orange-600 font-bold">*Jika User dapat melihat Quotation, ia otomatis dapat melihat Invoice yang terkait dengan Quotation tersebut.</span>
                   </div>
-                  {mockQuotations.map(quo => {
+                  {realQuotations.map(quo => {
                     const isSelected = selectedQuotations.includes(quo.id)
                     return (
                       <label 
@@ -202,7 +418,7 @@ export default function UsersPage() {
                         <div>
                           <div className="text-sm font-bold text-foreground mb-1">{quo.number}</div>
                           <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                            {quo.brand.name} • {quo.status}
+                            {quo.brand?.name || '-'} • {quo.status} • Total: {formatCurrency(quo.total)}
                           </div>
                         </div>
                       </label>
@@ -214,11 +430,171 @@ export default function UsersPage() {
 
             <div className="p-4 border-t border-border/60 bg-gray-50/50 flex justify-end gap-3">
               <Button variant="outline" onClick={() => setMappingUser(null)}>Batal</Button>
-              <Button className="bg-orange-600 hover:bg-orange-700 text-white" onClick={() => {
-                alert('Mapping akses berhasil disimpan!')
-                setMappingUser(null)
-              }}>Simpan Akses</Button>
+              <Button 
+                className="bg-orange-600 hover:bg-orange-700 text-white" 
+                loading={updateAccessMutation.isPending}
+                onClick={() => {
+                  updateAccessMutation.mutate({
+                    userId: mappingUser.id,
+                    projectIds: selectedProjects,
+                    quotationIds: selectedQuotations,
+                    invoiceIds: [] // Currently not mapping invoices directly
+                  })
+                }}
+              >Simpan Akses</Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tambah User Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col border border-border/60">
+            <div className="flex items-center justify-between p-5 border-b border-border/60 bg-gray-50/50">
+              <h3 className="font-bold text-foreground">Tambah User Baru</h3>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-black/5 hover:text-foreground transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddUser} className="flex flex-col">
+              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Nama Perusahaan <span className="text-red-500">*</span></label>
+                  <input type="text" required value={newUserCompanyName} onChange={(e) => setNewUserCompanyName(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Username <span className="text-red-500">*</span></label>
+                  <input type="text" required value={newUserUsername} onChange={(e) => setNewUserUsername(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Password <span className="text-red-500">*</span></label>
+                  <input type="password" required minLength={6} value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Role User <span className="text-red-500">*</span></label>
+                  <select required value={newUserRoleId} onChange={(e) => setNewUserRoleId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm bg-white focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400">
+                    <option value="" disabled>Pilih Role</option>
+                    {roles.map((r: any) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {roles.find((r: any) => r.id === newUserRoleId)?.name === 'Brand' && (
+                  <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Nama Brand (Relasi)</label>
+                    <select required value={newUserBrandId} onChange={(e) => setNewUserBrandId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-orange-200 bg-orange-50/30 text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400">
+                      <option value="" disabled>Pilih Brand yang diwakili</option>
+                      {brands.map((b: any) => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-muted-foreground mt-1">User ini hanya dapat mengakses data terkait brand yang dipilih.</p>
+                  </div>
+                )}
+
+                <div className="border-t border-border/60 my-4 pt-4">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Informasi Tambahan (Opsional)</p>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Nama PIC</label>
+                      <input type="text" value={newUserPicName} onChange={(e) => setNewUserPicName(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email</label>
+                      <input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Nomor Telepon</label>
+                      <input type="tel" value={newUserPhone} onChange={(e) => setNewUserPhone(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Alamat</label>
+                      <textarea value={newUserAddress} onChange={(e) => setNewUserAddress(e.target.value)} className="w-full p-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 min-h-[80px] resize-none" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-4 border-t border-border/60 bg-gray-50/50 flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>Batal</Button>
+                <Button type="submit" className="bg-orange-600 hover:bg-orange-700 text-white" loading={createUserMutation.isPending}>
+                  Simpan User
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col border border-border/60">
+            <div className="flex items-center justify-between p-5 border-b border-border/60 bg-gray-50/50">
+              <div>
+                <h3 className="font-bold text-foreground">Edit User</h3>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">{editingUser.name}</p>
+              </div>
+              <button 
+                onClick={() => setEditingUser(null)}
+                className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-black/5 hover:text-foreground transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveEditUser} className="flex flex-col">
+              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Nama <span className="text-red-500">*</span></label>
+                  <input type="text" required value={editUserName} onChange={(e) => setEditUserName(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email</label>
+                  <input type="email" value={editUserEmail} onChange={(e) => setEditUserEmail(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Nomor Telepon</label>
+                  <input type="tel" value={editUserPhone} onChange={(e) => setEditUserPhone(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Role <span className="text-red-500">*</span></label>
+                  <select required value={editUserRoleId} onChange={(e) => setEditUserRoleId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm bg-white focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400">
+                    <option value="" disabled>Pilih Role</option>
+                    {roles.map((r: any) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Password Baru <span className="text-muted-foreground font-normal">(opsional)</span></label>
+                  <input type="password" minLength={6} placeholder="Kosongkan jika tidak ingin mengganti" value={editUserPassword} onChange={(e) => setEditUserPassword(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-border text-sm focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400" />
+                </div>
+              </div>
+              
+              <div className="p-4 border-t border-border/60 bg-gray-50/50 flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => setEditingUser(null)}>Batal</Button>
+                <Button type="submit" className="bg-orange-600 hover:bg-orange-700 text-white" loading={updateUserMutation.isPending}>
+                  Simpan Perubahan
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

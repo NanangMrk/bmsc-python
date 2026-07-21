@@ -23,7 +23,7 @@ interface NavItem {
   icon: React.ElementType
   to?: string
   children?: { label: string; to: string }[]
-  roles?: string[]
+  permission?: string | string[]
 }
 
 const navItems: NavItem[] = [
@@ -31,12 +31,13 @@ const navItems: NavItem[] = [
     label: 'Dashboard',
     icon: LayoutDashboard,
     to: '/dashboard',
+    permission: 'dash_view',
   },
   {
     label: 'Project',
     icon: FolderKanban,
     to: '/projects',
-    roles: ['SUPER_ADMIN', 'ADMIN', 'KREATOR', 'EDITOR', 'BRAND'],
+    permission: 'proj_view',
   },
   {
     label: 'Invoice & Payment',
@@ -45,25 +46,25 @@ const navItems: NavItem[] = [
       { label: 'Quotation', to: '/invoice/quotation' },
       { label: 'Invoice', to: '/invoice/invoice' },
     ],
-    roles: ['SUPER_ADMIN', 'ADMIN', 'BRAND'],
+    permission: 'quo_inv_view',
   },
   {
     label: 'Keuangan',
     icon: Wallet,
     to: '/finance',
-    roles: ['SUPER_ADMIN', 'ADMIN'],
+    permission: 'fin_view',
   },
   {
     label: 'Kelola Platform',
     icon: Layers,
     to: '/platform',
-    roles: ['SUPER_ADMIN', 'ADMIN'],
+    permission: 'plat_view',
   },
   {
     label: 'Rate Card',
     icon: CreditCard,
     to: '/ratecard',
-    roles: ['SUPER_ADMIN', 'ADMIN'],
+    permission: 'rate_view',
   },
   {
     label: 'User & Role',
@@ -72,13 +73,13 @@ const navItems: NavItem[] = [
       { label: 'Daftar User', to: '/users' },
       { label: 'Matriks Hak Akses', to: '/roles' },
     ],
-    roles: ['SUPER_ADMIN', 'ADMIN'],
+    permission: ['usr_view', 'role_view'],
   },
   {
     label: 'Settings (Pengaturan)',
     icon: Settings,
     to: '/settings',
-    roles: ['SUPER_ADMIN', 'ADMIN'],
+    permission: 'set_general',
   },
 ]
 
@@ -99,8 +100,17 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   }
 
   const filteredNav = navItems.filter((item) => {
-    if (!item.roles) return true
-    return user && item.roles.includes(user.role)
+    if (!user) return false
+    if (user.role === 'SUPER_ADMIN') return true
+    
+    if (item.permission) {
+      if (Array.isArray(item.permission)) {
+        return item.permission.some(p => user.permissions?.includes(p))
+      }
+      return user.permissions?.includes(item.permission)
+    }
+    
+    return true
   })
 
   return (

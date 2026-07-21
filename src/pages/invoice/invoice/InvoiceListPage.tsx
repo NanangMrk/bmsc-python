@@ -6,6 +6,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 
 export default function InvoiceListPage() {
   const navigate = useNavigate()
@@ -13,40 +15,51 @@ export default function InvoiceListPage() {
   const [filterStatus, setFilterStatus] = useState('ALL')
   const [view, setView] = useState<'table' | 'grid'>('grid')
   
-  const [invoices, setInvoices] = useState(mockInvoices)
+  const queryClient = useQueryClient()
+  
+  const { data: invoices = [] } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: () => api<any[]>('/finance/invoices')
+  })
+
   const [isOpen, setIsOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [invoiceStatus, setInvoiceStatus] = useState<any>('BELUM_DIBAYAR')
 
-
-
-  const openEditDrawer = (inv: typeof invoices[0]) => {
+  const openEditDrawer = (inv: any) => {
     setEditingId(inv.id)
     setInvoiceStatus(inv.status)
     setIsOpen(true)
   }
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string, status: string }) => api(`/finance/invoices/${id}/status`, { method: 'PATCH', data: { status } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] })
+      setIsOpen(false)
+      setEditingId(null)
+    },
+    onError: (err: any) => {
+      alert('Gagal memperbarui invoice: ' + err.message)
+    }
+  })
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
     if (editingId) {
-      const updated = invoices.map(i => {
-        if (i.id === editingId) return { ...i, status: invoiceStatus }
-        return i
-      })
-      setInvoices(updated)
+      updateMutation.mutate({ id: editingId, status: invoiceStatus })
     }
-    setIsOpen(false)
-    setEditingId(null)
   }
 
-  const filtered = invoices.filter((inv) => {
-    const matchSearch = inv.number.toLowerCase().includes(search.toLowerCase()) || inv.brand.name.toLowerCase().includes(search.toLowerCase())
+  const filtered = invoices.filter((inv: any) => {
+    const matchSearch = (inv.number || '').toLowerCase().includes(search.toLowerCase()) || 
+                        (inv.brand?.name || '').toLowerCase().includes(search.toLowerCase())
     const matchStatus = filterStatus === 'ALL' || inv.status === filterStatus
     return matchSearch && matchStatus
   })
 
-  const totalRevenue = invoices.filter((i) => i.status === 'LUNAS').reduce((acc, i) => acc + i.total, 0)
-  const pendingRevenue = invoices.filter((i) => i.status !== 'LUNAS').reduce((acc, i) => acc + i.total, 0)
+  const totalRevenue = invoices.filter((i: any) => i.status === 'LUNAS').reduce((acc: number, i: any) => acc + Number(i.total), 0)
+  const pendingRevenue = invoices.filter((i: any) => i.status !== 'LUNAS').reduce((acc: number, i: any) => acc + Number(i.total), 0)
 
   return (
     <div className="space-y-5">
@@ -130,7 +143,7 @@ export default function InvoiceListPage() {
               {filtered.map((inv) => (
                 <tr key={inv.id} className="hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => navigate(`/invoice/invoice/${inv.id}`)}>
                   <td className="px-5 py-3.5 font-mono text-xs font-medium">{inv.number}</td>
-                  <td className="px-4 py-3.5"><span className="text-sm">{inv.brand.name}</span></td>
+                  <td className="px-4 py-3.5"><span className="text-sm">{inv.brand?.name || '-'}</span></td>
                   <td className="px-4 py-3.5 font-semibold">{formatCurrency(inv.total)}</td>
                   <td className="px-4 py-3.5"><StatusBadge status={inv.status} size="sm" /></td>
                   <td className="px-4 py-3.5 text-xs text-muted-foreground">{formatDateShort(inv.dueDate)}</td>
@@ -167,7 +180,7 @@ export default function InvoiceListPage() {
               <div className="p-4 flex-1">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{inv.brand.name}</span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{inv.brand?.name || '-'}</span>
                     <h3 className="font-bold text-sm font-mono text-foreground">{inv.number}</h3>
                   </div>
                   <StatusBadge status={inv.status} size="sm" />

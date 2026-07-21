@@ -1,19 +1,39 @@
 import { useParams } from 'react-router-dom'
 import { Download, AlertCircle } from 'lucide-react'
 import { mockInvoices, mockProjects, mockPayments } from '@/lib/mock-data'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDateShort } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 
 export default function PublicInvoicePage() {
   const { id } = useParams()
 
-  // Try to find in mockInvoices first
-  const invData = mockInvoices.find((i) => i.id === id || i.number === id)
+  const { data: invoiceData, isLoading } = useQuery({
+    queryKey: ['invoice-public', id],
+    queryFn: () => api<any>(`/finance/invoices/public/${id}`),
+    enabled: !!id
+  })
 
-  // Try to find in mockPayments
-  const payData = mockPayments.find((p) => p.id === id)
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => api<any>('/settings')
+  })
 
-  if (!invData && !payData) {
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => api<any[]>('/bank-accounts')
+  })
+  const settings = settingsData || {}
+  const activeBank = bankAccounts.find((b: any) => b.isActive) || bankAccounts[0]
+
+  const invoice = invoiceData
+  
+  if (isLoading) {
+    return <div className="min-h-screen bg-stone-100 flex flex-col items-center justify-center"><div className="animate-pulse font-bold text-muted-foreground">Loading Invoice...</div></div>
+  }
+
+  if (!invoice) {
     return (
       <div className="min-h-screen bg-stone-100 flex flex-col items-center justify-center p-6 text-center">
         <div className="bg-white border border-stone-200 shadow-sm rounded-2xl p-8 max-w-sm">
@@ -27,20 +47,21 @@ export default function PublicInvoicePage() {
     )
   }
 
-  // Resolve details depending on type
-  const title = payData
-    ? (payData.title || (payData.type === 'DP' ? 'Down Payment (DP) 50%' : 'Pelunasan Akhir 50%'))
-    : 'Jasa Pemasaran Influencer / Konten Digital'
+  const title = invoice.description || 'Jasa Pemasaran Influencer / Konten Digital'
+  const amount = Number(invoice.total || 0)
+  const status = invoice.status || 'BELUM_DIBAYAR'
+  const invoiceNumber = invoice.number || 'INV-XXX'
+  const createdAt = invoice.createdAt || ''
 
-  const amount = payData ? payData.amount : (invData?.total || 0)
-  const status = payData ? payData.status : (invData?.status || 'BELUM_DIBAYAR')
-  const invoiceNumber = payData ? `INV-PAY-${payData.id.toUpperCase()}` : (invData?.number || 'INV-2025-XXX')
-  const createdAt = payData ? payData.createdAt : (invData?.createdAt || '')
+  const project = invoice.project
+  const brand = invoice.brand || (invoice.userAccess?.[0]?.user ? { name: invoice.userAccess[0].user.name, email: invoice.userAccess[0].user.email } : null)
 
-  // Find project
-  const projectId = payData ? payData.projectId : (invData?.projectId || '')
-  const project = mockProjects.find((p) => p.id === projectId)
-  const brand = project?.brand || invData?.brand
+
+
+  const taxPercent = settings.invTaxEnabled ? (settings.invTaxPercent || 11) : 0
+  const subtotal = amount || 0
+  const tax = subtotal * (taxPercent / 100)
+  const grandTotal = subtotal + tax
 
   return (
     <div className="min-h-screen bg-stone-100/50 py-10 print:bg-white print:py-0">
@@ -81,7 +102,8 @@ export default function PublicInvoicePage() {
       </div>
 
       {/* Invoice Sheet */}
-      <div id="public-invoice-sheet" className="bg-white border border-gray-250/70 shadow-md rounded-[24px] p-6 sm:p-12 max-w-3xl mx-auto relative overflow-hidden print:border-0 print:shadow-none print:p-0">
+      <div id="public-invoice-sheet" className="max-w-3xl mx-auto px-4 print:px-0">
+        <div className="bg-white border border-gray-200 shadow-md rounded-[24px] p-6 sm:p-12 relative overflow-hidden print:border-0 print:shadow-none print:p-10 min-h-[29.7cm] flex flex-col print:block print:min-h-0">
 
         {/* Diagonal Stamp */}
         <div className="absolute top-6 right-6 sm:top-12 sm:right-12 z-10">
@@ -120,16 +142,14 @@ export default function PublicInvoicePage() {
           <div>
             <div className="flex items-center gap-3 mb-3">
               <div className="h-9 w-9 bg-orange-600 text-white rounded-full flex items-center justify-center font-black text-base shadow-sm">
-                N
+                {settings.agencyName?.charAt(0) || 'N'}
               </div>
-              <span className="font-extrabold text-base text-foreground">NanangMrk</span>
+              <span className="font-extrabold text-base text-foreground">{settings.agencyName || 'NanangMrk'}</span>
             </div>
-            <div className="text-xs text-muted-foreground space-y-0.5 leading-relaxed">
-              <p className="font-bold text-foreground text-xs">NanangMrk Channel</p>
-              <p>Jl. Pangeran Syarief</p>
-              <p>RT 03 RW 01 Saripan Jepara 59414</p>
-              <p>Email: nanangmrkchannel@gmail.com</p>
-              <p>Telp: 085156014905</p>
+            <div className="text-xs text-muted-foreground space-y-0.5 leading-relaxed whitespace-pre-line">
+              {settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}
+              <br />
+              {settings.email || 'finance@bmsc.id'} | {settings.phone || '+62 811 1234 567'}
             </div>
           </div>
 
@@ -137,8 +157,8 @@ export default function PublicInvoicePage() {
           <div className="sm:text-right text-xs text-muted-foreground space-y-1 sm:mt-12">
             <h2 className="text-2xl font-black text-orange-600 tracking-wider">INVOICE</h2>
             <p className="font-semibold text-foreground">No. Invoice: <span className="font-mono text-muted-foreground">{invoiceNumber}</span></p>
-            <p className="font-semibold text-foreground">Tanggal: <span className="text-muted-foreground">{createdAt}</span></p>
-            <p className="font-semibold text-foreground">Tenggat: <span className="text-amber-500 font-bold">{createdAt}</span></p>
+            <p className="font-semibold text-foreground print:text-black">Tanggal: <span className="text-muted-foreground print:text-black/70">{formatDateShort(createdAt)}</span></p>
+            <p className="font-semibold text-foreground print:text-black">Tenggat: <span className="text-amber-500 font-bold">{invoice.dueDate ? formatDateShort(invoice.dueDate) : '-'}</span></p>
           </div>
         </div>
 
@@ -150,10 +170,11 @@ export default function PublicInvoicePage() {
           <div>
             <h3 className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest mb-2.5">DITANGGUHKAN KEPADA (BILL TO)</h3>
             <div className="text-xs space-y-0.5 leading-relaxed">
-              <p className="font-bold text-foreground uppercase">{brand?.name || '—'}</p>
-              <p><span className="text-muted-foreground">Attn:</span> {brand?.name || '—'}</p>
-              <p className="text-muted-foreground">{brand?.email || '—'}</p>
-              <p className="text-muted-foreground">—</p>
+              <p className="font-bold text-foreground uppercase">{invoice.userAccess?.[0]?.user?.companyName || brand?.name || invoice.userAccess?.[0]?.user?.name || '—'}</p>
+              <p><span className="text-muted-foreground">Attn:</span> {invoice.userAccess?.[0]?.user?.picName || invoice.userAccess?.[0]?.user?.name || brand?.name || '—'}</p>
+              <p className="text-muted-foreground">{brand?.email || invoice.userAccess?.[0]?.user?.email || '—'}</p>
+              <p className="text-muted-foreground">{invoice.userAccess?.[0]?.user?.phone || '—'}</p>
+              <p className="text-muted-foreground whitespace-pre-wrap">{invoice.userAccess?.[0]?.user?.address || ''}</p>
             </div>
           </div>
 
@@ -161,8 +182,8 @@ export default function PublicInvoicePage() {
           <div>
             <h3 className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest mb-2.5">INFORMASI PROYEK & KAMPANYE</h3>
             <div className="text-xs space-y-0.5 leading-relaxed">
-              <p className="font-bold text-foreground uppercase">{project?.name || 'KAMPANYE MARKETING'}</p>
-              <p className="text-muted-foreground">Tagihan termin pembayaran untuk pengerjaan kampanye konten.</p>
+              <p className="font-bold text-foreground uppercase">{invoice.quotation?.title || project?.name || `${brand?.name || 'KLIEN'} MARKETING CAMPAIGN`}</p>
+              <p className="text-muted-foreground">{invoice.quotation?.description || 'Tagihan termin pembayaran untuk pengerjaan kampanye konten.'}</p>
               <p><span className="text-muted-foreground">Termin:</span> {title}</p>
             </div>
           </div>
@@ -185,16 +206,25 @@ export default function PublicInvoicePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-medium text-foreground">
-                <tr className="hover:bg-gray-50/30">
-                  <td className="px-5 py-4 font-bold text-foreground/80">
-                    <p>{project?.name || 'Jasa Kampanye Pemasaran Digital'}</p>
-                    <p className="text-muted-foreground text-[10px] font-normal mt-0.5">{title}</p>
-                  </td>
-                  <td className="px-3 py-4 text-center font-bold">1</td>
-                  <td className="px-3 py-4 text-center text-muted-foreground capitalize">Milestone</td>
-                  <td className="px-4 py-4 text-right font-semibold">{formatCurrency(amount)}</td>
-                  <td className="px-5 py-4 text-right font-bold text-foreground">{formatCurrency(amount)}</td>
-                </tr>
+                {(invoice.items && invoice.items.length > 0) ? (
+                  invoice.items.map((item: any) => (
+                    <tr key={item.id} className="hover:bg-gray-50/30">
+                      <td className="px-5 py-4 font-bold text-foreground/80">
+                        {item.name}
+                      </td>
+                      <td className="px-3 py-4 text-center font-bold">{item.qty}</td>
+                      <td className="px-3 py-4 text-center text-muted-foreground capitalize">{item.unit}</td>
+                      <td className="px-4 py-4 text-right font-semibold">{formatCurrency(item.price)}</td>
+                      <td className="px-5 py-4 text-right font-bold text-foreground">{formatCurrency((item.qty || 0) * (item.price || 0))}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground italic">
+                      Belum ada item tagihan.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -204,55 +234,77 @@ export default function PublicInvoicePage() {
         <div className="flex flex-col items-end space-y-2 mt-6 font-semibold">
           <div className="flex justify-between w-full max-w-[280px] text-xs text-muted-foreground border-b border-gray-100 pb-2">
             <span>Subtotal Pekerjaan:</span>
-            <span className="font-bold text-foreground">{formatCurrency(amount)}</span>
+            <span className="font-bold text-foreground">{formatCurrency(subtotal)}</span>
           </div>
+          {settings.invTaxEnabled !== false && (
+            <div className="flex justify-between w-full max-w-[280px] text-xs text-muted-foreground border-b border-gray-100 pb-2">
+              <span>{settings.invTaxName || 'PPN'} ({taxPercent}%):</span>
+              <span className="font-bold text-foreground print:text-black">{formatCurrency(tax)}</span>
+            </div>
+          )}
           <div className="flex justify-between w-full max-w-[280px] text-xs items-baseline">
             <span className="font-bold text-foreground text-xs uppercase tracking-wide">Total Tagihan (IDR):</span>
-            <span className="font-black text-orange-600 text-base">{formatCurrency(amount)}</span>
+            <span className="font-black text-orange-600 text-base">{formatCurrency(grandTotal)}</span>
           </div>
         </div>
 
-        {/* Payment Details Box */}
-        <div className="border border-gray-200 rounded-2xl p-5 bg-gray-50/20 grid md:grid-cols-2 gap-5 mt-8 text-xs leading-relaxed">
-          {/* Payment Instructions */}
-          <div className="space-y-1.5">
-            <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px]">TATA CARA PEMBAYARAN</h4>
-            <p className="text-muted-foreground font-medium">
-              Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905
-            </p>
-          </div>
+        {settings.invShowBank && (
+          <div className="border border-gray-200 rounded-2xl p-5 bg-gray-50/20 print:bg-transparent print:border-0 grid md:grid-cols-2 gap-5 mt-8 text-xs leading-relaxed">
+            <div className="space-y-1.5">
+              <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px] print:text-black/70">TATA CARA PEMBAYARAN</h4>
+              <p className="text-muted-foreground font-medium whitespace-pre-line print:text-black/70">
+                {settings.invBankInstruction || 'Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905'}
+              </p>
+            </div>
 
-          {/* Target Bank Account */}
-          <div className="md:border-l border-gray-200 md:pl-5 space-y-0.5">
-            <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px] mb-1.5">REKENING TUJUAN</h4>
-            <p className="font-extrabold text-foreground">DIGIBANK by DBS</p>
-            <p className="font-black text-orange-600 text-base tracking-wider">1702945239</p>
-            <p className="text-muted-foreground font-semibold">a.n. Muhammad Nanang Rizaldi</p>
+            {/* Target Bank Account */}
+            <div className="md:border-l border-gray-200 md:pl-5 space-y-0.5">
+              <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px] mb-1.5">REKENING TUJUAN</h4>
+              {activeBank ? (
+                <>
+                  <p className="font-extrabold text-foreground">{activeBank.bankName}</p>
+                  <p className="font-black text-orange-600 text-base tracking-wider">{activeBank.accountNumber}</p>
+                  <p className="text-muted-foreground font-semibold">a.n. {activeBank.accountName}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-extrabold text-foreground print:text-black">Belum ada Rekening Aktif</p>
+                  <p className="text-muted-foreground print:text-black/70 font-semibold text-[10px] mt-1">Hubungi agensi terkait.</p>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Terms & Signature Section */}
-        <div className="grid sm:grid-cols-2 gap-8 mt-10 text-xs">
+        <div className="grid sm:grid-cols-2 gap-8 mt-auto print:mt-10 pt-10 text-xs">
           {/* Terms and Conditions */}
           <div className="space-y-1.5">
             <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px]">SYARAT & KETENTUAN</h4>
-            <ol className="list-decimal pl-4 text-muted-foreground space-y-0.5 font-medium leading-relaxed">
-              <li>Invoice ini adalah sah diterbitkan oleh perusahaan.</li>
-              <li>Tagihan ini berlaku sebagai kwitansi lunas yang sah apabila status tercantum LUNAS / PAID.</li>
-            </ol>
+            <div className="text-[10.5px] text-muted-foreground/80 leading-relaxed font-medium whitespace-pre-line">
+              {settings.invTermsText || '1. Invoice ini adalah sah diterbitkan oleh perusahaan.\n2. Tagihan ini berlaku sebagai kwitansi lunas yang sah apabila status tercantum LUNAS / PAID.'}
+            </div>
           </div>
 
           {/* Signature */}
           <div className="flex flex-col items-end">
-            <div className="flex flex-col items-center text-center space-y-12 w-48">
+            <div className="flex flex-col items-center text-center space-y-12 w-48 relative">
               <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px]">HORMAT KAMI,</h4>
-              <div className="space-y-1 w-full">
-                <p className="border-b border-dotted border-gray-400 pb-1.5 font-bold text-foreground w-full text-center">NanangMrk</p>
-                <p className="text-muted-foreground text-[9px] font-semibold uppercase tracking-widest text-center w-full">NanangMrk Channel</p>
+              
+
+
+              <div className="space-y-1 w-full relative z-10">
+                <p className="border-b border-dotted border-gray-400 pb-1.5 font-bold text-foreground w-full text-center">
+                  {settings.invSignatoryName || 'NanangMrk'}
+                </p>
+                <p className="text-muted-foreground text-[9px] font-semibold uppercase tracking-widest text-center w-full">
+                  {settings.invSignatoryRole || 'NanangMrk Channel'}
+                </p>
               </div>
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   )

@@ -4,10 +4,7 @@ import { Zap, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth.store'
 
 const demoAccounts = [
-  { label: 'Super Admin', email: 'rina@bmsc.id', color: 'bg-orange-50 text-orange-700 border-orange-200' },
-  { label: 'Admin', email: 'dimas@bmsc.id', color: 'bg-orange-50 text-orange-700 border-orange-200' },
-  { label: 'Brand', email: 'sarah@kopinusantara.id', color: 'bg-green-50 text-green-700 border-green-200' },
-  { label: 'Kreator', email: 'budi@bmsc.id', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { label: 'Super Admin', email: 'admin@bms.com', color: 'bg-orange-50 text-orange-700 border-orange-200' },
 ]
 
 export default function LoginPage() {
@@ -30,13 +27,13 @@ export default function LoginPage() {
     if (success) {
       navigate('/dashboard')
     } else {
-      setError('Email atau password tidak valid. Gunakan akun demo di bawah.')
+      setError('Login gagal. Periksa kembali Username/Email dan password Anda.')
     }
   }
 
   const fillDemo = (demoEmail: string) => {
     setEmail(demoEmail)
-    setPassword('demo123')
+    setPassword('password123')
     setError('')
   }
 
@@ -101,14 +98,14 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5" htmlFor="email">
-                Email
+                Username / Email
               </label>
               <input
                 id="email"
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="email@contoh.com"
+                placeholder="Masukkan username atau email"
                 required
                 className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 placeholder:text-muted-foreground"
               />
@@ -185,7 +182,7 @@ export default function LoginPage() {
               ))}
             </div>
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              Password demo: <code className="bg-muted px-1 py-0.5 rounded">demo123</code>
+              Password demo: <code className="bg-muted px-1 py-0.5 rounded">password123</code>
             </p>
           </div>
         </div>

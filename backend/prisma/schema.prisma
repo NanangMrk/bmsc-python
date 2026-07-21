@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// User & Role models
+model User {
+  id            String              @id @default(uuid())
+  name          String
+  username      String              @unique
+  companyName   String
+  picName       String?
+  phone         String?
+  address       String?
+  email         String?             @unique
+  password      String
+  roleId        String
+  role          Role                @relation(fields: [roleId], references: [id])
+  brandId       String? // jika user adalah brand
+  brand         Brand?              @relation(fields: [brandId], references: [id])
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  projectAccess  ProjectUserAccess[]
+  quotationAccess QuotationUserAccess[]
+  invoiceAccess  InvoiceUserAccess[]
+  chatMessages   ChatMessage[]
+  billedPayments PaymentTermin[]     @relation("PaymentBillTo")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  permissions Json     @default("[]") // Array of permission ID strings
+  users       User[]
+}
+
+// Brand & Master Data
+model Brand {
+  id         String      @id @default(uuid())
+  name       String
+  logo       String?
+  projects   Project[]
+  users      User[]
+  quotations Quotation[]
+}
+
+model Platform {
+  id        String            @id @default(uuid())
+  name      String
+  icon      String?
+  idealCost Decimal?
+  projects  ProjectPlatform[]
+}
+
+model RateCard {
+  id         String  @id @default(uuid())
+  name       String
+  platformId String?
+  price      Decimal
+  unit       String? // e.g. "per video", "per foto"
+  published  Boolean @default(true)
+}
+
+// Projects
+model Project {
+  id              String              @id @default(uuid())
+  name            String
+  brandId         String?
+  brand           Brand?              @relation(fields: [brandId], references: [id])
+  startDate       DateTime
+  deadline        DateTime?
+  totalValue      Decimal
+  status          String // active, completed, overdue, etc
+  progress        Int                 @default(1) // 1 to 5
+  phaseStatuses   Json?
+  platforms       ProjectPlatform[]
+  payments        PaymentTermin[]
+  shipments       Shipment[]
+  conceptPages    ConceptPage[]
+  scripts         ScriptSegment[]
+  productionTasks ProductionTask[]
+  uploads         UploadLink[]
+  chatMessages    ChatMessage[]
+  userAccess      ProjectUserAccess[]
+  createdAt       DateTime            @default(now())
+}
+
+model ProjectPlatform {
+  id         String   @id @default(uuid())
+  projectId  String
+  platformId String
+  project    Project  @relation(fields: [projectId], references: [id])
+  platform   Platform @relation(fields: [platformId], references: [id])
+}
+
+model PaymentTermin {
+  id         String    @id @default(uuid())
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id])
+  type       String // "DP" | "PELUNASAN"
+  percentage Int // 50
+  amount     Decimal
+  status     String // "MENUNGGU" | "PROSES_VERIFIKASI" | "LUNAS"
+  proofFile  String?
+  verifiedBy String?
+  verifiedAt DateTime?
+  billToId   String?
+  billTo     User?    @relation("PaymentBillTo", fields: [billToId], references: [id])
+}
+
+model Shipment {
+  id           String    @id @default(uuid())
+  projectId    String    @unique
+  project      Project   @relation(fields: [projectId], references: [id])
+  resiPhoto    String?
+  status       String    @default("BELUM_DIKIRIM") // BELUM_DIKIRIM | DIKIRIM | DIKONFIRMASI
+  arrivalProof String? // foto/video unboxing
+  confirmedBy  String?
+  confirmedAt  DateTime?
+}
+
+model ConceptPage {
+  id         String   @id @default(uuid())
+  projectId  String
+  platformId String
+  project    Project  @relation(fields: [projectId], references: [id])
+  content    Json // block-based rich text content
+  updatedAt  DateTime @updatedAt
+}
+
+model ScriptSegment {
+  id         String      @id @default(uuid())
+  projectId  String
+  platformId String
+  title      String // e.g. "OPENING"
+  subtitle   String?
+  project    Project     @relation(fields: [projectId], references: [id])
+  rows       ScriptRow[]
+}
+
+model ScriptRow {
+  id         String        @id @default(uuid())
+  segmentId  String
+  segment    ScriptSegment @relation(fields: [segmentId], references: [id])
+  rowNumber  String // "1.1"
+  audioText  String?       @db.Text
+  visualText String?       @db.Text
+  imageUrl   String?
+  duration   Int? // detik
+  wordCount  Int?
+  comments   RowComment[]
+}
+
+model RowComment {
+  id        String    @id @default(uuid())
+  rowId     String
+  row       ScriptRow @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  userId    String
+  userName  String
+  text      String    @db.Text
+  createdAt DateTime  @default(now())
+}
+
+model ProductionTask {
+  id         String    @id @default(uuid())
+  projectId  String
+  platformId String
+  project    Project   @relation(fields: [projectId], references: [id])
+  title      String
+  assigneeId String?
+  status     String // TODO | IN_PROGRESS | REVIEW | DONE
+  deadline   DateTime?
+}
+
+model UploadLink {
+  id         String   @id @default(uuid())
+  projectId  String
+  platformId String
+  project    Project  @relation(fields: [projectId], references: [id])
+  url        String
+  title      String?
+  thumbnail  String?
+  createdAt  DateTime @default(now())
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  message    String   @db.Text
+  attachment String?
+  createdAt  DateTime @default(now())
+}
+
+// Invoices
+model Quotation {
+  id         String   @id @default(uuid())
+  number     String   @unique
+  brandId    String?
+  brand      Brand?   @relation(fields: [brandId], references: [id])
+  projectId   String?
+  title       String? // User defined campaign title
+  description String? @db.Text // User defined campaign description
+  items       Json // array of {desc, qty, price}
+  total       Decimal
+  status      String // DRAFT | TERKIRIM | DIPROSES | DITOLAK
+  shareToken String?  @unique
+  createdAt  DateTime @default(now())
+  invoice    Invoice?
+  userAccess QuotationUserAccess[]
+}
+
+model Invoice {
+  id           String     @id @default(uuid())
+  number       String     @unique
+  quotationId  String?    @unique
+  quotation    Quotation? @relation(fields: [quotationId], references: [id])
+  brandId      String?
+  projectId    String?
+  items        Json?
+  total        Decimal
+  status       String // BELUM_DIBAYAR | MENUNGGU_VERIFIKASI | LUNAS | OVERDUE
+  dueDate      DateTime?
+  shareToken   String?    @unique
+  paymentProof String?
+  createdAt    DateTime   @default(now())
+  userAccess   InvoiceUserAccess[]
+}
+
+// Access Control Relations
+model ProjectUserAccess {
+  id        String  @id @default(uuid())
+  userId    String
+  projectId String
+  user      User    @relation(fields: [userId], references: [id])
+  project   Project @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, projectId])
+}
+
+model InvoiceUserAccess {
+  id        String @id @default(uuid())
+  userId    String
+  invoiceId String
+  user      User    @relation(fields: [userId], references: [id])
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, invoiceId])
+}
+
+model SystemSetting {
+  id               String  @id @default("GLOBAL")
+  agencyName       String?
+  corporateName    String?
+  tagline          String?
+  email            String?
+  phone            String?
+  building         String?
+  address          String? @db.Text
+  quoAccentColor   String?
+  quoShowSignature Boolean @default(true)
+  quoSignatoryName String?
+  quoSignatoryRole String?
+  quoTermsText     String? @db.Text
+  quoTaxEnabled    Boolean @default(true)
+  quoTaxName       String?
+  quoTaxPercent    Float?  @default(11)
+  quoShowBank      Boolean @default(false)
+  quoBankInstruction String? @db.Text
+  invAccentColor   String?
+  invShowSignature Boolean @default(true)
+  invSignatoryName String?
+  invSignatoryRole String?
+  invTermsText     String? @db.Text
+  invTaxEnabled    Boolean @default(true)
+  invTaxName       String?
+  invTaxPercent    Float?  @default(11)
+  invShowBank      Boolean @default(true)
+  invBankInstruction String? @db.Text
+  updatedAt        DateTime @updatedAt
+}
+
+model QuotationUserAccess {
+  id          String    @id @default(uuid())
+  userId      String
+  quotationId String
+  user        User      @relation(fields: [userId], references: [id])
+  quotation   Quotation @relation(fields: [quotationId], references: [id])
+
+  @@unique([userId, quotationId])
+}
+
+model BankAccount {
+  id            String   @id @default(uuid())
+  bankName      String
+  accountNumber String
+  accountName   String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

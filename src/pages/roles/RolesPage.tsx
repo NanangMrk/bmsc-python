@@ -1,15 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Users, ShieldCheck, Folder, Check, X, Save, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
-
-const roles = [
-  { id: 'admin', name: 'Admin' },
-  { id: 'brand', name: 'Brand' },
-  { id: 'brand-', name: 'BRAND-' },
-  { id: 'editor', name: 'Editor' },
-  { id: 'finance', name: 'Finance' },
-]
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import { api } from '@/lib/api'
 
 // Granular permissions structure based on Sidebar Menus
 const permissionGroups = [
@@ -126,18 +121,44 @@ const permissionGroups = [
   }
 ]
 
-// Mock initial state for BRAND role
-const initialBrandPermissions = ['dash_overview', 'dash_calendar', 'proj_view', 'proj_add']
-
 export default function RolesPage() {
-  const [activeRole, setActiveRole] = useState('brand')
-  const [rolesList, setRolesList] = useState(roles)
+  const [activeRole, setActiveRole] = useState('')
   const [showAddRoleModal, setShowAddRoleModal] = useState(false)
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null)
   const [newRoleName, setNewRoleName] = useState('')
 
-  const [permissions, setPermissions] = useState<string[]>(initialBrandPermissions)
+  const { data: rawRoles = [], isLoading } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => api<any[]>('/roles')
+  })
+
+  const queryClient = useQueryClient()
+
+  // Format backend roles to match UI
+  const rolesList = rawRoles.map(r => ({
+    id: r.id,
+    name: r.name,
+    permissions: Array.isArray(r.permissions) ? r.permissions : []
+  }))
+
+  const [permissions, setPermissions] = useState<string[]>([])
   const [isDirty, setIsDirty] = useState(false)
+
+  // Ensure activeRole defaults to the first available role if not set
+  useEffect(() => {
+    if (rolesList.length > 0 && activeRole === '') {
+      setActiveRole(rolesList[0].id)
+    }
+  }, [rolesList.length, activeRole])
+
+  // Sync permissions when activeRole changes
+  useEffect(() => {
+    const role = rolesList.find(r => r.id === activeRole)
+    if (role) {
+      setPermissions(role.permissions)
+      setIsDirty(false)
+    }
+  }, [activeRole, rawRoles])
 
   const togglePermission = (id: string) => {
     setPermissions(prev => {
@@ -148,6 +169,38 @@ export default function RolesPage() {
       return newPerms
     })
   }
+
+  const createRoleMutation = useMutation({
+    mutationFn: (data: any) => api('/roles', { method: 'POST', data }),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] })
+      setActiveRole(res.role.id)
+      setPermissions([])
+      setNewRoleName('')
+      setShowAddRoleModal(false)
+    },
+    onError: (err: any) => alert('Gagal membuat role: ' + err.message)
+  })
+
+  const updateRoleMutation = useMutation({
+    mutationFn: (data: any) => api(`/roles/${data.id}`, { method: 'PUT', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] })
+      setIsDirty(false)
+      setNewRoleName('')
+      setShowAddRoleModal(false)
+    },
+    onError: (err: any) => alert('Gagal mengupdate role: ' + err.message)
+  })
+
+  const deleteRoleMutation = useMutation({
+    mutationFn: (id: string) => api(`/roles/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] })
+      setActiveRole('')
+    },
+    onError: (err: any) => alert('Gagal menghapus role: ' + err.message)
+  })
 
   const openAddRoleModal = () => {
     setEditingRoleId(null)
@@ -163,29 +216,26 @@ export default function RolesPage() {
 
   const handleDeleteRole = (id: string) => {
     if (confirm('Apakah Anda yakin ingin menghapus role ini?')) {
-      const updated = rolesList.filter(r => r.id !== id)
-      setRolesList(updated)
-      if (activeRole === id && updated.length > 0) {
-        setActiveRole(updated[0].id)
-      }
+      deleteRoleMutation.mutate(id)
     }
   }
 
   const handleSaveRole = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newRoleName.trim()) return
-    const newId = newRoleName.toLowerCase().replace(/\s+/g, '-')
     
     if (editingRoleId) {
-      setRolesList(prev => prev.map(r => r.id === editingRoleId ? { ...r, name: newRoleName } : r))
+      updateRoleMutation.mutate({ id: editingRoleId, name: newRoleName })
     } else {
-      setRolesList([...rolesList, { id: newId, name: newRoleName }])
-      setActiveRole(newId)
-      setPermissions([])
+      createRoleMutation.mutate({ name: newRoleName, permissions: [] })
     }
-    
-    setNewRoleName('')
-    setShowAddRoleModal(false)
+  }
+
+  const handleSavePermissions = () => {
+    if (!activeRole) return
+    const role = rolesList.find(r => r.id === activeRole)
+    if (!role) return
+    updateRoleMutation.mutate({ id: activeRole, name: role.name, permissions })
   }
 
   const activeRoleName = rolesList.find(r => r.id === activeRole)?.name || ''
@@ -206,9 +256,9 @@ export default function RolesPage() {
         
         {/* Toggle Tabs */}
         <div className="flex items-center bg-gray-100/80 p-1 rounded-lg border border-border/50">
-          <button className="px-4 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground rounded-md transition-colors">
+          <Link to="/users" className="px-4 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground rounded-md transition-colors inline-block">
             Daftar User
-          </button>
+          </Link>
           <button className="px-4 py-1.5 text-sm font-bold text-orange-600 bg-white rounded-md shadow-sm border border-border/40">
             Matriks Hak Akses (Permissions)
           </button>
@@ -288,6 +338,7 @@ export default function RolesPage() {
             variant="outline" 
             size="sm" 
             disabled={!isDirty}
+            onClick={handleSavePermissions}
             className={cn(
               "font-semibold flex items-center gap-2",
               !isDirty && "bg-gray-100/50 text-muted-foreground border-transparent opacity-60"

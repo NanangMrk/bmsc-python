@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Plus, Trash2, Check, Settings2, Pencil, Instagram, Youtube, Layers, X, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency } from '@/lib/utils'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 
 interface PlatformItem {
   id: string
@@ -15,53 +17,8 @@ interface PlatformItem {
   logo?: string
 }
 
-const INITIAL_PLATFORMS: PlatformItem[] = [
-  {
-    id: 'ig-reels',
-    name: 'Instagram Reels',
-    iconBg: 'bg-pink-50',
-    iconColor: 'text-pink-600',
-    icon: <Instagram className="h-5 w-5" />,
-    budget: 2000000,
-    description: 'Platform pemasaran video pendek Instagram.',
-    status: 'AKTIF'
-  },
-  {
-    id: 'tk-video',
-    name: 'Tiktok Vidio ( VT )',
-    iconBg: 'bg-gray-100',
-    iconColor: 'text-gray-900',
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-music-2"><circle cx="8" cy="18" r="4"/><path d="M12 18V2l7 4"/></svg>
-    ),
-    budget: 3000000,
-    description: 'Platform video viral dengan interaksi tinggi.',
-    status: 'AKTIF'
-  },
-  {
-    id: 'yt-reg',
-    name: 'Youtube Regular Vidio',
-    iconBg: 'bg-red-50',
-    iconColor: 'text-red-600',
-    icon: <Youtube className="h-5 w-5" />,
-    budget: 8000000,
-    description: 'Ulasan mendalam dan video durasi panjang.',
-    status: 'AKTIF'
-  },
-  {
-    id: 'yt-short',
-    name: 'Youtube Short',
-    iconBg: 'bg-red-50',
-    iconColor: 'text-red-600',
-    icon: <Youtube className="h-5 w-5" />,
-    budget: 2000000,
-    description: 'Video Shorts Youtube untuk jangkauan cepat.',
-    status: 'AKTIF'
-  }
-]
-
 export default function PlatformPage() {
-  const [platforms, setPlatforms] = useState<PlatformItem[]>(INITIAL_PLATFORMS)
+  const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   
@@ -71,7 +28,68 @@ export default function PlatformPage() {
   const [description, setDescription] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
 
-    const openEditModal = (p: PlatformItem) => {
+  const { data: rawPlatforms = [], isLoading } = useQuery({
+    queryKey: ['platforms'],
+    queryFn: () => api<any[]>('/platforms')
+  })
+
+  const getPlatformIcon = (platformName: string) => {
+    const lower = platformName.toLowerCase()
+    if (lower.includes('youtube')) {
+      return {
+        icon: <Youtube className="h-5 w-5" />,
+        bg: 'bg-red-50',
+        color: 'text-red-600',
+        nameStr: 'youtube'
+      }
+    }
+    if (lower.includes('instagram')) {
+      return {
+        icon: <Instagram className="h-5 w-5" />,
+        bg: 'bg-pink-50',
+        color: 'text-pink-600',
+        nameStr: 'instagram'
+      }
+    }
+    if (lower.includes('tiktok')) {
+      return {
+        icon: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-music-2"><circle cx="8" cy="18" r="4"/><path d="M12 18V2l7 4"/></svg>,
+        bg: 'bg-gray-100',
+        color: 'text-gray-900',
+        nameStr: 'tiktok'
+      }
+    }
+    return {
+      icon: <Layers className="h-5 w-5" />,
+      bg: 'bg-orange-50',
+      color: 'text-orange-600',
+      nameStr: 'layers'
+    }
+  }
+
+  const platforms: PlatformItem[] = rawPlatforms.map(p => {
+    const style = getPlatformIcon(p.name)
+    return {
+      id: p.id,
+      name: p.name,
+      budget: parseFloat(p.idealCost || '0'),
+      icon: style.icon,
+      iconBg: style.bg,
+      iconColor: style.color,
+      status: 'AKTIF', // Not in DB yet
+      description: 'Platform pemasaran media sosial.' // Not in DB yet
+    }
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => api('/platforms', { method: 'POST', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platforms'] })
+      setIsModalOpen(false)
+    }
+  })
+
+  const openEditModal = (p: PlatformItem) => {
     setEditingId(p.id)
     setName(p.name)
     setBudget(p.budget.toString())
@@ -89,36 +107,6 @@ export default function PlatformPage() {
     setIsModalOpen(true)
   }
 
-  const getPlatformIcon = (platformName: string) => {
-    const lower = platformName.toLowerCase()
-    if (lower.includes('youtube')) {
-      return {
-        icon: <Youtube className="h-5 w-5" />,
-        bg: 'bg-red-50',
-        color: 'text-red-600'
-      }
-    }
-    if (lower.includes('instagram')) {
-      return {
-        icon: <Instagram className="h-5 w-5" />,
-        bg: 'bg-pink-50',
-        color: 'text-pink-600'
-      }
-    }
-    if (lower.includes('tiktok')) {
-      return {
-        icon: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-music-2"><circle cx="8" cy="18" r="4"/><path d="M12 18V2l7 4"/></svg>,
-        bg: 'bg-gray-100',
-        color: 'text-gray-900'
-      }
-    }
-    return {
-      icon: <Layers className="h-5 w-5" />,
-      bg: 'bg-orange-50',
-      color: 'text-orange-600'
-    }
-  }
-
   const handleSavePlatform = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
@@ -126,53 +114,24 @@ export default function PlatformPage() {
     const style = getPlatformIcon(name)
     
     if (editingId) {
-      setPlatforms(prev => prev.map(p => {
-        if (p.id === editingId) {
-          return {
-            ...p,
-            name,
-            icon: style.icon,
-            iconBg: style.bg,
-            iconColor: style.color,
-            budget: parseInt(budget) || 0,
-            description: description || 'Platform pemasaran media sosial.',
-            logo: logoUrl
-          }
-        }
-        return p
-      }))
+      alert("Fitur update belum tersedia di API backend saat ini.")
     } else {
-      const newPlatform: PlatformItem = {
-        id: `pl-${Date.now()}`,
+      createMutation.mutate({
         name,
-        icon: style.icon,
-        iconBg: style.bg,
-        iconColor: style.color,
-        budget: parseInt(budget) || 0,
-        description: description || 'Platform pemasaran media sosial.',
-        status: 'AKTIF',
-        logo: logoUrl
-      }
-      setPlatforms((prev) => [...prev, newPlatform])
+        icon: style.nameStr,
+        idealCost: parseFloat(budget) || 0
+      })
     }
-
-    setIsModalOpen(false)
   }
 
   const handleDeletePlatform = (id: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus platform ini?')) {
-      setPlatforms((prev) => prev.filter((p) => p.id !== id))
+    if (confirm('Fitur hapus belum terhubung dengan API backend saat ini.')) {
+      // noop
     }
   }
 
   const togglePlatformStatus = (id: string) => {
-    setPlatforms((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, status: p.status === 'AKTIF' ? 'NONAKTIF' : 'AKTIF' }
-          : p
-      )
-    )
+    alert('Fitur ubah status belum terhubung ke API.')
   }
 
   return (

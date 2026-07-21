@@ -5,30 +5,69 @@ import { mockInvoices, mockProjects, mockQuotations } from '@/lib/mock-data'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDate, formatDateShort, cn } from '@/lib/utils'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRef } from 'react'
+import { api } from '@/lib/api'
 
 export default function InvoiceDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
-  const initialInv = mockInvoices.find((i) => i.id === id) ?? mockInvoices[0]
-  const initialQuo = mockQuotations.find((q) => q.id === initialInv.quotationId)
-  
-  // Make sure invoice has items (either from mock or fallback to quotation items)
-  const initialItems = initialInv.items || (initialQuo ? initialQuo.items : [])
-  const [invoice, setInvoice] = useState({ ...initialInv, items: initialItems })
+  const { data: invoiceData, isLoading } = useQuery({
+    queryKey: ['invoice', id],
+    queryFn: () => api<any>(`/finance/invoices/${id}`),
+    enabled: !!id
+  })
+
+  const invoice = invoiceData
+
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => api<any>('/settings')
+  })
+
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => api<any[]>('/bank-accounts')
+  })
+
+  const settings = settingsData || {}
+  const activeBank = bankAccounts.find((b: any) => b.isActive) || bankAccounts[0]
 
   const [isDirty, setIsDirty] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
 
-  // Sync state if id in URL changes
-  useEffect(() => {
-    const found = mockInvoices.find((i) => i.id === id) ?? mockInvoices[0]
-    const quo = mockQuotations.find((q) => q.id === found.quotationId)
-    const items = found.items || (quo ? quo.items : [])
-    setInvoice({ ...found, items })
-  }, [id])
+  const statusMutation = useMutation({
+    mutationFn: (data: { status: string, paymentProof?: string }) => 
+      api<any>(`/finance/invoices/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoice', id] })
+    },
+    onError: (err: any) => {
+      alert('Gagal mengupdate status: ' + err.message)
+    }
+  })
 
-  // Fetch associated project details based on stateful invoice
-  const project = mockProjects.find((p) => p.id === invoice.projectId)
+  const project = null // mockProjects.find((p) => p.id === invoice?.projectId)
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-muted-foreground">Loading invoice...</div>
+  }
+
+  if (!invoice) {
+    return <div className="p-8 text-center text-red-500">Invoice tidak ditemukan atau gagal dimuat. Coba refresh halaman.</div>
+  }
+
+  const taxPercent = settings.invTaxEnabled ? (settings.invTaxPercent || 11) : 0
+
+  const subtotal = Number(invoice.total || 0)
+  const tax = subtotal * (taxPercent / 100)
+  const grandTotal = subtotal + tax
 
   // Edit Header Modal Handler
 
@@ -88,33 +127,49 @@ export default function InvoiceDetailPage() {
     setIsDirty(false)
   }
 
+
+
   const handleVerify = () => {
-    setInvoice({
-      ...invoice,
-      status: 'LUNAS'
-    })
+    statusMutation.mutate({ status: 'LUNAS' })
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      // NOTE: api helper might try to stringify if not careful, but it supports FormData natively if we don't pass headers
+      // Let's use standard fetch to be safe with FormData headers (boundary)
+      const token = localStorage.getItem('token')
+      const res = await fetch('http://localhost:3000/api/upload/single', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      })
+      if (!res.ok) throw new Error('Upload failed')
+      
+      const data = await res.json()
+      statusMutation.mutate({ status: 'MENUNGGU_VERIFIKASI', paymentProof: data.url })
+    } catch (err: any) {
+      alert("Gagal upload: " + err.message)
+    }
   }
 
   const handleUploadProof = () => {
-    setInvoice({
-      ...invoice,
-      status: 'MENUNGGU_VERIFIKASI',
-      paymentProof: '/proof-mock.jpg'
-    })
+    fileInputRef.current?.click()
   }
 
   const handleStatusChange = (newStatus: typeof invoice.status) => {
-    const updates: Partial<typeof invoice> = { status: newStatus }
-    if (newStatus === 'BELUM_DIBAYAR' || newStatus === 'OVERDUE') {
-      updates.paymentProof = undefined
-    } else if (newStatus === 'MENUNGGU_VERIFIKASI' && !invoice.paymentProof) {
-      updates.paymentProof = '/proof-mock.jpg'
-    }
-    setInvoice({
-      ...invoice,
-      ...updates
-    })
-    setIsDirty(true)
+    statusMutation.mutate({ status: newStatus })
+  }
+
+  const handleDeleteProof = () => {
+    statusMutation.mutate({ status: invoice.status, paymentProof: '' })
   }
 
   return (
@@ -128,15 +183,16 @@ export default function InvoiceDetailPage() {
           <ArrowLeft className="h-4 w-4" /> Kembali ke Aplikasi
         </button>
         <div className="flex items-center gap-2.5">
-                    {invoice.shareToken && (
+          {invoice.shareToken && (
             <Button 
               variant="outline" 
               size="sm" 
               className="text-xs font-semibold px-4 py-2"
-              icon={<Share2 className="h-3.5 w-3.5" />}
+              icon={isCopied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Share2 className="h-3.5 w-3.5" />}
               onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/invoice/invoice/${invoice.id}`)
-                alert('Link invoice berhasil disalin!')
+                navigator.clipboard.writeText(`${window.location.origin}/public/invoice/${invoice.id}`)
+                setIsCopied(true)
+                setTimeout(() => setIsCopied(false), 2000)
               }}
             >
               Salin Link Invoice
@@ -163,7 +219,7 @@ export default function InvoiceDetailPage() {
       <div className="grid lg:grid-cols-3 gap-6 items-start print:flex print:flex-col print:gap-0">
         {/* Invoice Preview Sheet */}
         <div className="lg:col-span-2 print:w-full">
-          <div className="bg-white border border-gray-200 shadow-md rounded-[24px] p-6 sm:p-12 relative overflow-hidden print:border-0 print:shadow-none print:p-10">
+          <div className="bg-white border border-gray-200 shadow-md rounded-[24px] p-6 sm:p-12 relative overflow-hidden print:border-0 print:shadow-none print:p-10 min-h-[29.7cm] flex flex-col print:block print:min-h-0">
             {/* Diagonal Stamp */}
             <div className="absolute top-6 right-6 sm:top-12 sm:right-12 z-10 print:opacity-100">
               {invoice.status === 'LUNAS' ? (
@@ -201,16 +257,14 @@ export default function InvoiceDetailPage() {
               <div>
                 <div className="flex items-center gap-3 mb-3">
                   <div className="h-9 w-9 bg-orange-600 text-white rounded-full flex items-center justify-center font-black text-base shadow-sm">
-                    N
+                    {settings.agencyName?.charAt(0) || 'N'}
                   </div>
-                  <span className="font-extrabold text-base text-foreground print:text-black">NanangMrk</span>
+                  <span className="font-extrabold text-base text-foreground print:text-black">{settings.agencyName || 'NanangMrk'}</span>
                 </div>
-                <div className="text-xs text-muted-foreground print:text-black/70 space-y-0.5 leading-relaxed">
-                  <p className="font-bold text-foreground print:text-black text-xs">NanangMrk Channel</p>
-                  <p>Jl. Pangeran Syarief</p>
-                  <p>RT 03 RW 01 Saripan Jepara 59414</p>
-                  <p>Email: nanangmrkchannel@gmail.com</p>
-                  <p>Telp: 085156014905</p>
+                <div className="text-xs text-muted-foreground print:text-black/70 space-y-0.5 leading-relaxed whitespace-pre-line">
+                  {settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}
+                  <br />
+                  {settings.email || 'finance@bmsc.id'} | {settings.phone || '+62 811 1234 567'}
                 </div>
               </div>
 
@@ -219,7 +273,7 @@ export default function InvoiceDetailPage() {
                 <h2 className="text-2xl font-black text-orange-600 tracking-wider">INVOICE</h2>
                 <p className="font-semibold text-foreground print:text-black">No. Invoice: <span className="font-mono text-muted-foreground print:text-black/70">{invoice.number}</span></p>
                 <p className="font-semibold text-foreground print:text-black">Tanggal: <span className="text-muted-foreground print:text-black/70">{formatDateShort(invoice.createdAt)}</span></p>
-                <p className="font-semibold text-foreground print:text-black">Tenggat: <span className="text-amber-500 font-bold">{invoice.dueDate}</span></p>
+                <p className="font-semibold text-foreground print:text-black">Tenggat: <span className="text-amber-500 font-bold">{invoice.dueDate ? formatDateShort(invoice.dueDate) : '-'}</span></p>
               </div>
             </div>
 
@@ -231,10 +285,11 @@ export default function InvoiceDetailPage() {
               <div>
                 <h3 className="text-[10px] font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest mb-2.5">DITANGGUHKAN KEPADA (BILL TO)</h3>
                 <div className="text-xs space-y-0.5 leading-relaxed">
-                  <p className="font-bold text-foreground print:text-black uppercase">{invoice.brand.name}</p>
-                  <p><span className="text-muted-foreground print:text-black/70">Attn:</span> {invoice.brand.name}</p>
-                  <p className="text-muted-foreground print:text-black/70">{invoice.brand.email}</p>
-                  <p className="text-muted-foreground print:text-black/70">—</p>
+                  <p className="font-bold text-foreground print:text-black uppercase">{invoice.userAccess?.[0]?.user?.companyName || invoice.brand?.name || invoice.userAccess?.[0]?.user?.name || '-'}</p>
+                  <p><span className="text-muted-foreground print:text-black/70">Attn:</span> {invoice.userAccess?.[0]?.user?.picName || invoice.userAccess?.[0]?.user?.name || invoice.brand?.name || '-'}</p>
+                  <p className="text-muted-foreground print:text-black/70">{invoice.brand?.email || invoice.userAccess?.[0]?.user?.email || '-'}</p>
+                  <p className="text-muted-foreground print:text-black/70">{invoice.userAccess?.[0]?.user?.phone || '—'}</p>
+                  <p className="text-muted-foreground print:text-black/70 whitespace-pre-wrap">{invoice.userAccess?.[0]?.user?.address || ''}</p>
                 </div>
               </div>
 
@@ -243,10 +298,10 @@ export default function InvoiceDetailPage() {
                 <h3 className="text-[10px] font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest mb-2.5">INFORMASI PROYEK & KAMPANYE</h3>
                 <div className="text-xs space-y-0.5 leading-relaxed">
                   <p className="font-bold text-foreground print:text-black uppercase">
-                    {project ? project.name : `${invoice.brand.name} MARKETING CAMPAIGN`}
+                    {invoice.quotation?.title || project?.name || `${invoice.brand?.name || invoice.userAccess?.[0]?.user?.name || 'KLIEN'} MARKETING CAMPAIGN`}
                   </p>
-                  <p className="text-muted-foreground print:text-black/70">Tagihan komersial untuk kampanye pemasaran influencer.</p>
-                  <p><span className="text-muted-foreground print:text-black/70">Selesai Sebelum:</span> {invoice.dueDate}</p>
+                  <p className="text-muted-foreground print:text-black/70">{invoice.quotation?.description || 'Tagihan komersial untuk kampanye pemasaran influencer.'}</p>
+                  <p><span className="text-muted-foreground print:text-black/70">Selesai Sebelum:</span> {invoice.dueDate ? formatDateShort(invoice.dueDate) : '-'}</p>
                 </div>
               </div>
             </div>
@@ -255,14 +310,8 @@ export default function InvoiceDetailPage() {
 
             {/* Items Table */}
             <div className="space-y-3">
-                            <div className="flex justify-between items-center print:hidden">
+              <div className="flex justify-between items-center print:hidden">
                 <h3 className="text-[10px] font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest">DESKRIPSI ITEM PEKERJAAN</h3>
-                <button 
-                  onClick={addBlankItem}
-                  className="text-[10px] font-bold text-orange-600 hover:text-orange-700 hover:underline flex items-center gap-1"
-                >
-                  + Tambah Item Manual
-                </button>
               </div>
               <h3 className="text-[10px] font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest hidden print:block">DESKRIPSI ITEM PEKERJAAN</h3>
               <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
@@ -274,7 +323,6 @@ export default function InvoiceDetailPage() {
                       <th className="px-3 py-3.5 text-center font-bold w-20">Satuan</th>
                       <th className="px-4 py-3.5 text-right font-bold w-32">Harga Satuan</th>
                       <th className="px-5 py-3.5 text-right font-bold w-36">Total</th>
-                      <th className="px-3 py-3.5 w-10 print:hidden" />
                     </tr>
                   </thead>
                                     <tbody className="divide-y divide-gray-100 font-medium text-foreground print:text-black">
@@ -282,49 +330,19 @@ export default function InvoiceDetailPage() {
                       invoice.items.map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50/30 print:bg-transparent">
                           <td className="px-5 py-3 font-bold text-foreground print:text-black/80 print:text-black">
-                            <input
-                              type="text"
-                              value={item.name}
-                              placeholder="Masukkan Deskripsi Pekerjaan"
-                              onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                              className="w-full h-8 px-2 rounded-md border border-border bg-white text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 print:border-0 print:p-0 print:bg-transparent print:text-black print:w-full print:shadow-none"
-                            />
+                            {item.name}
                           </td>
                           <td className="px-3 py-3 text-center font-bold">
-                            <input
-                              type="number"
-                              value={item.qty}
-                              min="1"
-                              onChange={(e) => updateItem(item.id, 'qty', parseInt(e.target.value) || 1)}
-                              className="w-full h-8 text-center rounded-md border border-border bg-white text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 print:border-0 print:p-0 print:bg-transparent print:text-black print:w-full print:shadow-none"
-                            />
+                            {item.qty}
                           </td>
                           <td className="px-3 py-3 text-center text-muted-foreground print:text-black/70 capitalize">
-                            <input
-                              type="text"
-                              value={item.unit}
-                              placeholder="video"
-                              onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
-                              className="w-full h-8 text-center rounded-md border border-border bg-white text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 print:border-0 print:p-0 print:bg-transparent print:text-black print:w-full print:shadow-none"
-                            />
+                            {item.unit}
                           </td>
-                          <td className="px-4 py-3 text-right font-semibold">
-                            <input
-                              type="number"
-                              value={item.price}
-                              min="0"
-                              onChange={(e) => updateItem(item.id, 'price', parseInt(e.target.value) || 0)}
-                              className="w-full h-8 text-right px-2 rounded-md border border-border bg-white text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 font-mono print:border-0 print:p-0 print:bg-transparent print:text-black print:w-full print:shadow-none"
-                            />
+                          <td className="px-4 py-3 text-right font-semibold font-mono">
+                            {formatCurrency(item.price)}
                           </td>
-                          <td className="px-5 py-3 text-right font-bold text-foreground print:text-black">{formatCurrency(item.subtotal)}</td>
-                          <td className="px-3 py-3 text-center print:hidden">
-                            <button
-                              onClick={() => removeItem(item.id)}
-                              className="text-muted-foreground print:text-black/70 hover:text-red-500 transition-colors p-1"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                          <td className="px-5 py-3 text-right font-bold text-foreground print:text-black">
+                            {formatCurrency((item.qty || 0) * (item.price || 0))}
                           </td>
                         </tr>
                       ))
@@ -344,51 +362,74 @@ export default function InvoiceDetailPage() {
             <div className="flex flex-col items-end space-y-2 mt-6 font-semibold">
               <div className="flex justify-between w-full max-w-[280px] text-xs text-muted-foreground print:text-black/70 border-b border-gray-100 pb-2">
                 <span>Subtotal Pekerjaan:</span>
-                <span className="font-bold text-foreground print:text-black">{formatCurrency(invoice.total)}</span>
+                <span className="font-bold text-foreground print:text-black">{formatCurrency(subtotal)}</span>
               </div>
+              {settings.invTaxEnabled !== false && (
+                <div className="flex justify-between w-full max-w-[280px] text-xs text-muted-foreground print:text-black/70 border-b border-gray-100 pb-2">
+                  <span>{settings.invTaxName || 'PPN'} ({taxPercent}%):</span>
+                  <span className="font-bold text-foreground print:text-black">{formatCurrency(tax)}</span>
+                </div>
+              )}
               <div className="flex justify-between w-full max-w-[280px] text-xs items-baseline">
                 <span className="font-bold text-foreground print:text-black text-xs uppercase tracking-wide">Total Tagihan (IDR):</span>
-                <span className="font-black text-orange-600 text-sm sm:text-base">{formatCurrency(invoice.total)}</span>
+                <span className="font-black text-orange-600 text-sm sm:text-base">{formatCurrency(grandTotal)}</span>
               </div>
             </div>
 
             {/* Payment Details Box */}
-            <div className="border border-gray-200 rounded-2xl p-5 bg-gray-50/20 print:bg-transparent print:border-0 grid md:grid-cols-2 gap-5 mt-8 text-xs leading-relaxed">
-              {/* Payment Instructions */}
-              <div className="space-y-1.5">
-                <h4 className="font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest text-[9px]">TATA CARA PEMBAYARAN</h4>
-                <p className="text-muted-foreground print:text-black/70 font-medium">
-                  Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905
-                </p>
-              </div>
+            {settings.invShowBank && (
+              <div className="border border-gray-200 rounded-2xl p-5 bg-gray-50/20 print:bg-transparent print:border-0 grid md:grid-cols-2 gap-5 mt-8 text-xs leading-relaxed">
+                {/* Payment Instructions */}
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest text-[9px]">TATA CARA PEMBAYARAN</h4>
+                  <p className="text-muted-foreground print:text-black/70 font-medium whitespace-pre-line">
+                    {settings.invBankInstruction || 'Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905'}
+                  </p>
+                </div>
 
-              {/* Target Bank Account */}
-              <div className="md:border-l border-gray-200 md:pl-5 space-y-0.5">
-                <h4 className="font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest text-[9px] mb-1.5">REKENING TUJUAN</h4>
-                <p className="font-extrabold text-foreground print:text-black">DIGIBANK by DBS</p>
-                <p className="font-black text-orange-600 text-base tracking-wider">1702945239</p>
-                <p className="text-muted-foreground print:text-black/70 font-semibold">a.n. Muhammad Nanang Rizaldi</p>
+                {/* Target Bank Account */}
+                <div className="md:border-l border-gray-200 md:pl-5 space-y-0.5">
+                  <h4 className="font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest text-[9px] mb-1.5">REKENING TUJUAN</h4>
+                  {activeBank ? (
+                    <>
+                      <p className="font-extrabold text-foreground print:text-black">{activeBank.bankName}</p>
+                      <p className="font-black text-orange-600 text-base tracking-wider">{activeBank.accountNumber}</p>
+                      <p className="text-muted-foreground print:text-black/70 font-semibold">a.n. {activeBank.accountName}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-extrabold text-foreground print:text-black">Belum ada Rekening Aktif</p>
+                      <p className="text-muted-foreground print:text-black/70 font-semibold text-[10px] mt-1">Silakan tambahkan di menu Pengaturan.</p>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Terms & Signature Section */}
-            <div className="grid sm:grid-cols-2 gap-8 mt-10 text-xs">
+            <div className="grid sm:grid-cols-2 gap-8 mt-auto print:mt-10 pt-10 text-xs">
               {/* Terms and Conditions */}
               <div className="space-y-1.5">
                 <h4 className="font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest text-[9px]">SYARAT & KETENTUAN</h4>
-                <ol className="list-decimal pl-4 text-muted-foreground print:text-black/70 space-y-0.5 font-medium leading-relaxed">
-                  <li>Invoice ini adalah sah diterbitkan oleh perusahaan.</li>
-                  <li>Tagihan ini berlaku sebagai kwitansi lunas yang sah apabila status tercantum LUNAS / PAID.</li>
-                </ol>
+                <div className="text-[10.5px] text-muted-foreground/80 leading-relaxed font-medium whitespace-pre-line">
+                  {settings.invTermsText || '1. Invoice ini adalah sah diterbitkan oleh perusahaan.\n2. Tagihan ini berlaku sebagai kwitansi lunas yang sah apabila status tercantum LUNAS / PAID.'}
+                </div>
               </div>
 
               {/* Signature */}
               <div className="flex flex-col items-end">
-                <div className="flex flex-col items-center text-center space-y-12 w-48">
+                <div className="flex flex-col items-center text-center space-y-12 w-48 relative">
                   <h4 className="font-extrabold text-muted-foreground print:text-black/70 uppercase tracking-widest text-[9px]">HORMAT KAMI,</h4>
-                  <div className="space-y-1 w-full">
-                    <p className="border-b border-dotted border-gray-400 pb-1.5 font-bold text-foreground print:text-black w-full text-center">NanangMrk</p>
-                    <p className="text-muted-foreground print:text-black/70 text-[9px] font-semibold uppercase tracking-widest text-center w-full">NanangMrk Channel</p>
+                  
+
+
+                  <div className="space-y-1 w-full relative z-10">
+                    <p className="border-b border-dotted border-gray-400 pb-1.5 font-bold text-foreground print:text-black w-full text-center">
+                      {settings.invSignatoryName || 'NanangMrk'}
+                    </p>
+                    <p className="text-muted-foreground print:text-black/70 text-[9px] font-semibold uppercase tracking-widest text-center w-full">
+                      {settings.invSignatoryRole || 'NanangMrk Channel'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -405,14 +446,22 @@ export default function InvoiceDetailPage() {
               <div className="space-y-4">
                 <div className="p-3 bg-muted/30 print:bg-transparent rounded-lg flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-10 w-10 bg-orange-50 rounded-lg flex items-center justify-center text-orange-600 font-bold text-xs flex-shrink-0">IMG</div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">bukti_bayar.jpg</p>
-                      <p className="text-xs text-muted-foreground print:text-black/70">Sudah diunggah</p>
+                    <a href={`http://localhost:3000${invoice.paymentProof}`} target="_blank" rel="noopener noreferrer" className="block h-10 w-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 hover:opacity-80 transition-opacity">
+                      {invoice.paymentProof.match(/\.(jpeg|jpg|gif|png)$/i) ? (
+                        <img src={`http://localhost:3000${invoice.paymentProof}`} alt="Bukti Transfer" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-orange-600 font-bold text-xs">FILE</div>
+                      )}
+                    </a>
+                    <div className="min-w-0 flex flex-col items-start">
+                      <p className="text-sm font-medium truncate max-w-[120px]">Bukti Pembayaran</p>
+                      <a href={`http://localhost:3000${invoice.paymentProof}`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-orange-600 hover:underline">
+                        Lihat / Download
+                      </a>
                     </div>
                   </div>
                   <button 
-                    onClick={() => handleStatusChange('BELUM_DIBAYAR')} 
+                    onClick={handleDeleteProof} 
                     className="text-muted-foreground print:text-black/70 hover:text-red-500 transition-colors text-xs font-semibold flex-shrink-0"
                   >
                     Hapus
@@ -430,6 +479,13 @@ export default function InvoiceDetailPage() {
               </div>
             ) : (
               <div className="space-y-3">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  accept="image/jpeg, image/png, application/pdf"
+                  onChange={handleFileChange}
+                />
                 <div 
                   onClick={handleUploadProof}
                   className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-orange-300 transition-colors cursor-pointer"

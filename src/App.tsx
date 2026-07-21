@@ -1,14 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useAuthStore } from '@/stores/auth.store'
 
 // Layout
 import { AppLayout } from '@/components/layout/AppLayout'
 
-// Public pages
+// ... (imports remain the same up to queryClient)
 import LandingPage from '@/pages/landing/LandingPage'
 import LoginPage from '@/pages/auth/LoginPage'
-
-// App pages
 import DashboardPage from '@/pages/dashboard/DashboardPage'
 import ProjectsPage from '@/pages/projects/ProjectsPage'
 import ProjectDetailPage from '@/pages/projects/ProjectDetailPage'
@@ -29,6 +29,17 @@ import SettingsPage from '@/pages/settings/SettingsPage'
 const queryClient = new QueryClient()
 
 export default function App() {
+  const fetchProfile = useAuthStore(state => state.fetchProfile)
+  const isLoading = useAuthStore(state => state.isLoading)
+
+  useEffect(() => {
+    fetchProfile()
+  }, [fetchProfile])
+
+  if (isLoading) {
+    return <div className="h-screen w-full flex items-center justify-center">Loading...</div>
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Paperclip, AtSign } from 'lucide-react'
 import type { Project } from '@/lib/mock-data'
-import { mockChatMessages } from '@/lib/mock-data'
 import { Avatar } from '@/components/ui/Avatar'
 import { useAuthStore } from '@/stores/auth.store'
 import { cn } from '@/lib/utils'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface ChatTabProps {
   project: Project
@@ -21,27 +23,36 @@ function formatChatDate(dateStr: string): string {
 
 export function ChatTab({ project }: ChatTabProps) {
   const { user } = useAuthStore()
-  const [messages, setMessages] = useState(mockChatMessages.filter((m) => m.projectId === project.id))
+  const { hasPermission } = usePermissions()
+  const hasChatSend = hasPermission('proj_chat_send')
+
+  const queryClient = useQueryClient()
+  const [messages, setMessages] = useState<any[]>(() => (project as any).chatMessages || [])
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  // Sync messages when project data updates (e.g., after sending a message)
+  // Use project.id + length as stable dependency to avoid infinite loop
+  const incomingMessages: any[] = (project as any).chatMessages || []
+  useEffect(() => {
+    setMessages(incomingMessages)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id, incomingMessages.length])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const sendMessageMutation = useMutation({
+    mutationFn: (message: string) => api(`/chats/${project.id}`, { method: 'POST', data: { message } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+    }
+  })
+
   const sendMessage = () => {
     if (!input.trim() || !user) return
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `cm${Date.now()}`,
-        projectId: project.id,
-        userId: user.id,
-        user,
-        content: input.trim(),
-        createdAt: new Date().toISOString(),
-      },
-    ])
+    sendMessageMutation.mutate(input.trim())
     setInput('')
   }
 
@@ -88,7 +99,7 @@ export function ChatTab({ project }: ChatTabProps) {
                             : 'bg-muted text-foreground rounded-bl-sm'
                         )}
                       >
-                        {msg.content}
+                        {msg.message || msg.content}
                       </div>
                       <span className="text-[10px] text-muted-foreground mx-1">{formatTime(msg.createdAt)}</span>
                     </div>
@@ -102,6 +113,7 @@ export function ChatTab({ project }: ChatTabProps) {
       </div>
 
       {/* Input area */}
+      {hasChatSend ? (
       <div className="pt-3 border-t border-border mt-3">
         <div className="flex items-end gap-2">
           <div className="flex items-center gap-1">
@@ -141,6 +153,13 @@ export function ChatTab({ project }: ChatTabProps) {
           {messages.length} pesan · {project.brand.name}, Admin, dan tim project dapat melihat chat ini
         </p>
       </div>
+      ) : (
+      <div className="pt-3 border-t border-border mt-3 text-center">
+        <p className="text-xs text-muted-foreground py-2 italic bg-muted/30 rounded-xl">
+          Anda tidak memiliki izin untuk mengirim pesan.
+        </p>
+      </div>
+      )}
     </div>
   )
 }

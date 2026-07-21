@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -12,9 +12,11 @@ import {
   X,
   Trash2
 } from 'lucide-react'
-import { mockProjects } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
+import { usePermissions } from '@/hooks/usePermissions'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 
 // Tab components
 import { PaymentTab } from './tabs/PaymentTab'
@@ -37,24 +39,71 @@ const phases = [
 export default function ProjectDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuthStore()
-  const canEdit = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  const { hasPermission, canEdit } = usePermissions()
+  const hasPhaseStatusPerm = hasPermission('proj_phase_status')
+  const hasChatViewPerm = hasPermission('proj_chat_view')
 
   const [activeTab, setActiveTab] = useState('payment')
   const [isChatOpen, setIsChatOpen] = useState(false)
 
-  const project = mockProjects.find((p) => p.id === id) ?? mockProjects[0]
+  const { data: rawProject, isLoading } = useQuery({
+    queryKey: ['project', id],
+    queryFn: () => api<any>(`/projects/${id}`)
+  })
+
+  // Format the raw backend project to the expected frontend structure
+  const project = rawProject ? {
+    id: rawProject.id,
+    name: rawProject.name,
+    brandId: rawProject.brandId,
+    brand: rawProject.brand || { name: 'Unknown Brand' },
+    startDate: rawProject.startDate,
+    deadline: rawProject.deadline,
+    value: parseFloat(rawProject.totalValue || '0'),
+    status: rawProject.status,
+    platforms: rawProject.platforms?.map((pl: any) => pl.platform) || [],
+    picIds: [],
+    progress: rawProject.progress || 1,
+    phaseStatuses: rawProject.phaseStatuses || null,
+    createdAt: rawProject.createdAt,
+    // Add phase data explicitly for tabs to consume if they need it
+    payments: rawProject.payments || [],
+    shipments: rawProject.shipments || [],
+    conceptPages: rawProject.conceptPages || [],
+    scripts: rawProject.scripts || [],
+    productionTasks: rawProject.productionTasks || [],
+    uploads: rawProject.uploads || []
+  } : null;
 
   // Track phase completion statuses dynamically
   const [phaseStatuses, setPhaseStatuses] = useState<Record<string, 'MENUNGGU' | 'SELESAI'>>(() => {
+    if (project?.phaseStatuses) {
+      return typeof project.phaseStatuses === 'string' ? JSON.parse(project.phaseStatuses) : project.phaseStatuses
+    }
     return {
-      payment: project.progress >= 1 ? 'SELESAI' : 'MENUNGGU',
-      concept: project.progress >= 2 ? 'SELESAI' : 'MENUNGGU',
-      script: project.progress >= 3 ? 'SELESAI' : 'MENUNGGU',
-      production: project.progress >= 4 ? 'SELESAI' : 'MENUNGGU',
-      upload: project.progress >= 5 ? 'SELESAI' : 'MENUNGGU',
+      payment: 'MENUNGGU',
+      concept: 'MENUNGGU',
+      script: 'MENUNGGU',
+      production: 'MENUNGGU',
+      upload: 'MENUNGGU',
     }
   })
+
+  useEffect(() => {
+    if (project) {
+      if (project.phaseStatuses) {
+        setPhaseStatuses(typeof project.phaseStatuses === 'string' ? JSON.parse(project.phaseStatuses) : project.phaseStatuses)
+      } else {
+        setPhaseStatuses({
+          payment: 'MENUNGGU',
+          concept: 'MENUNGGU',
+          script: 'MENUNGGU',
+          production: 'MENUNGGU',
+          upload: 'MENUNGGU',
+        })
+      }
+    }
+  }, [project?.phaseStatuses])
 
   // Track unsaved modifications per phase
   const [tempStatuses, setTempStatuses] = useState<Record<string, 'MENUNGGU' | 'SELESAI'>>({})
@@ -66,7 +115,9 @@ export default function ProjectDetailPage() {
     }))
   }
 
-  const handleSaveStatus = (phaseId: string) => {
+  const queryClient = useQueryClient();
+
+  const handleSaveStatus = async (phaseId: string) => {
     const newStatus = tempStatuses[phaseId]
     if (!newStatus) return
 
@@ -79,31 +130,38 @@ export default function ProjectDetailPage() {
     // Calculate progress (number of completed phases)
     const completedCount = Object.values(updated).filter(s => s === 'SELESAI').length
 
-    // Commit new progress globally
-    const projIdx = mockProjects.findIndex(p => p.id === project.id)
-    if (projIdx !== -1) {
-      mockProjects[projIdx].progress = completedCount
-      project.progress = completedCount
+    try {
+      await api(`/projects/${id}/progress`, {
+        method: 'PATCH',
+        body: JSON.stringify({ 
+          progress: completedCount,
+          phaseStatuses: updated
+        })
+      })
+
+      // Invalidate the project query to refetch the latest from DB
+      queryClient.invalidateQueries({ queryKey: ['project', id] })
+
+      setTempStatuses(prev => {
+        const copy = { ...prev }
+        delete copy[phaseId]
+        return copy
+      })
+
+      alert(`Status fase berhasil disimpan! Progress proyek sekarang ${completedCount}/5 fase.`)
+    } catch (err: any) {
+      alert(`Gagal menyimpan progress fase: ${err.message}`)
     }
-
-    setTempStatuses(prev => {
-      const copy = { ...prev }
-      delete copy[phaseId]
-      return copy
-    })
-
-    alert(`Status fase berhasil disimpan! Progress proyek sekarang ${completedCount}/5 fase.`)
   }
 
   const handleDeleteProject = () => {
     if (confirm('Apakah Anda yakin ingin menghapus project ini secara permanen?')) {
-      const idx = mockProjects.findIndex((p) => p.id === id)
-      if (idx !== -1) {
-        mockProjects.splice(idx, 1)
-      }
-      navigate('/projects')
+      alert('Fitur hapus belum tersedia di API.')
     }
   }
+
+  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading project data...</div>
+  if (!project) return <div className="p-8 text-center text-red-500">Project not found.</div>
 
   const renderTab = () => {
     switch (activeTab) {
@@ -131,7 +189,8 @@ export default function ProjectDetailPage() {
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 bg-white p-6 rounded-xl border border-border/60 print:hidden">
         <div className="flex gap-4">
           <button
-            onClick={() => navigate('/projects')}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigate('/projects'); }}
             className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-full border border-border/80 hover:bg-muted/50 transition-colors"
           >
             <ArrowLeft className="h-5 w-5 text-muted-foreground" />
@@ -246,10 +305,10 @@ export default function ProjectDetailPage() {
                 <select
                   value={currentPhaseStatus}
                   onChange={(e) => handleSelectStatus(activeTab, e.target.value as any)}
-                  disabled={!canEdit}
+                  disabled={!hasPhaseStatusPerm}
                   className={cn(
                     "h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wider border focus:outline-none focus:ring-1 focus:ring-orange-500 bg-white transition-colors",
-                    canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-90",
+                    hasPhaseStatusPerm ? "cursor-pointer" : "cursor-not-allowed opacity-90",
                     currentPhaseStatus === 'SELESAI'
                       ? "border-green-200 text-green-700 bg-green-50/20"
                       : "border-amber-200 text-amber-700 bg-amber-50/20"
@@ -259,7 +318,7 @@ export default function ProjectDetailPage() {
                   <option value="SELESAI">SELESAI</option>
                 </select>
 
-                {canEdit && hasStatusChanged && (
+                {hasPhaseStatusPerm && hasStatusChanged && (
                   <button
                     onClick={() => handleSaveStatus(activeTab)}
                     className="bg-orange-600 hover:bg-orange-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-md transition-all animate-pulse uppercase tracking-wider animate-in fade-in duration-200"
@@ -277,7 +336,7 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Floating Chat */}
-      {activeTab !== 'chat' && (
+      {activeTab !== 'chat' && hasChatViewPerm && (
         <div className="print:hidden">
           {/* Chat Button */}
           <button

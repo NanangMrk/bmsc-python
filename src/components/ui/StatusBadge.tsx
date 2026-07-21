@@ -24,6 +24,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   DRAFT: { label: 'Draft', className: 'bg-gray-100 text-gray-600 border-gray-200' },
   TERKIRIM: { label: 'Terkirim', className: 'bg-orange-50 text-orange-700 border-orange-200' },
   DIPROSES: { label: 'Diproses', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+  DISETUJUI: { label: 'Disetujui', className: 'bg-green-50 text-green-700 border-green-200' },
   DITOLAK: { label: 'Ditolak', className: 'bg-red-50 text-red-700 border-red-200' },
   // Project
   BERJALAN: { label: 'Berjalan', className: 'bg-amber-50 text-amber-700 border-amber-200' },

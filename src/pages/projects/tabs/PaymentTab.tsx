@@ -1,19 +1,39 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Trash2, X, Pencil } from 'lucide-react'
 import { mockPayments } from '@/lib/mock-data'
 import type { Project, Payment, PaymentStatus } from '@/lib/mock-data'
 import { formatCurrency, cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface PaymentTabProps {
   project: Project
 }
 
 export function PaymentTab({ project }: PaymentTabProps) {
-  // Load payments dynamically
-  const [payments, setPayments] = useState<Payment[]>(() =>
-    mockPayments.filter((p) => p.projectId === project.id)
-  )
+  const queryClient = useQueryClient()
+  const { hasPermission } = usePermissions()
+  const hasPayAdd = hasPermission('proj_pay_add')
+  const hasPayDel = hasPermission('proj_pay_delete')
+  const hasPayPrint = hasPermission('proj_pay_print')
+
+  // Load payments dynamically from API project data
+  const [payments, setPayments] = useState<any[]>((project as any).payments || [])
+
+  // Load active bank accounts from settings
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => api<any[]>('/bank-accounts')
+  })
+  const activeBank = bankAccounts.find((b: any) => b.isActive) || bankAccounts[0]
+
+  useEffect(() => {
+    if ((project as any).payments) {
+      setPayments((project as any).payments);
+    }
+  }, [(project as any).payments]);
 
   // Add milestone form states
   const [showAddModal, setShowAddModal] = useState(false)
@@ -28,6 +48,12 @@ export function PaymentTab({ project }: PaymentTabProps) {
   const [editPayType, setEditPayType] = useState('')
   const [editPayAmount, setEditPayAmount] = useState('')
   const [editPayDescription, setEditPayDescription] = useState('')
+  const [editPayBillTo, setEditPayBillTo] = useState('')
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api<any[]>('/users')
+  })
 
   // State to track temporary status changes before save is clicked
   const [modifiedStatuses, setModifiedStatuses] = useState<Record<string, PaymentStatus>>({})
@@ -35,13 +61,19 @@ export function PaymentTab({ project }: PaymentTabProps) {
   // State to track which milestone invoice is being previewed for print
   const [printInvoicePayment, setPrintInvoicePayment] = useState<Payment | null>(null)
 
+  const deletePaymentMutation = useMutation({
+    mutationFn: (paymentId: string) => api(`/projects/payments/${paymentId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+    },
+    onError: (err: any) => {
+      alert('Gagal menghapus payment: ' + err.message)
+    }
+  })
+
   const handleDeletePayment = (paymentId: string) => {
     if (confirm('Apakah Anda yakin ingin menghapus tahap pembayaran ini?')) {
-      const idx = mockPayments.findIndex((p) => p.id === paymentId)
-      if (idx !== -1) {
-        mockPayments.splice(idx, 1)
-      }
-      setPayments((prev) => prev.filter((p) => p.id !== paymentId))
+      deletePaymentMutation.mutate(paymentId)
       // Remove any pending modified status
       setModifiedStatuses((prev) => {
         const copy = { ...prev }
@@ -59,34 +91,57 @@ export function PaymentTab({ project }: PaymentTabProps) {
     }))
   }
 
+  // const queryClient = useQueryClient();
+
   // Commit status change to database & local state
-  const handleSaveStatusChange = (paymentId: string) => {
+  const handleSaveStatusChange = async (paymentId: string) => {
     const newStatus = modifiedStatuses[paymentId]
     if (!newStatus) return
 
-    const idx = mockPayments.findIndex((p) => p.id === paymentId)
-    if (idx !== -1) {
-      mockPayments[idx].status = newStatus
-    }
-    setPayments((prev) =>
-      prev.map((p) => (p.id === paymentId ? { ...p, status: newStatus } : p))
-    )
+    try {
+      await api(`/payments/${paymentId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus }),
+      })
+      
+      // Update local state directly for immediate feedback
+      setPayments((prev) =>
+        prev.map((p) => (p.id === paymentId ? { ...p, status: newStatus } : p))
+      )
+      
+      // Invalidate the project query to refetch the latest from DB
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] })
 
-    // Clear tracking for this payment
-    setModifiedStatuses((prev) => {
-      const copy = { ...prev }
-      delete copy[paymentId]
-      return copy
-    })
+      // Clear tracking for this payment
+      setModifiedStatuses((prev) => {
+        const copy = { ...prev }
+        delete copy[paymentId]
+        return copy
+      })
+    } catch (err: any) {
+      alert('Gagal mengubah status: ' + err.message)
+    }
   }
 
-  const handleOpenEditModal = (pay: Payment) => {
+  const handleEditClick = (pay: any) => {
     setEditingPaymentId(pay.id)
-    setEditPayType(pay.title || (pay.type === 'DP' ? 'Down Payment (DP) 50%' : 'Pelunasan Akhir 50%'))
-    setEditPayAmount(pay.amount.toString())
+    setEditPayType(pay.type || pay.title || '')
+    setEditPayAmount(pay.amount?.toString() || '')
     setEditPayDescription(pay.description || '')
+    setEditPayBillTo(pay.billToId || '')
     setShowEditModal(true)
   }
+
+  const updatePaymentMutation = useMutation({
+    mutationFn: (data: any) => api(`/projects/payments/${editingPaymentId}`, { method: 'PATCH', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+      setShowEditModal(false)
+    },
+    onError: (err: any) => {
+      alert('Gagal mengupdate payment: ' + err.message)
+    }
+  })
 
   const handleEditPaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,27 +150,28 @@ export function PaymentTab({ project }: PaymentTabProps) {
       return
     }
 
-    const idx = mockPayments.findIndex((p) => p.id === editingPaymentId)
-    if (idx !== -1) {
-      mockPayments[idx].title = editPayType
-      mockPayments[idx].amount = parseInt(editPayAmount) || 0
-      mockPayments[idx].description = editPayDescription
-    }
-
-    setPayments((prev) =>
-      prev.map((p) =>
-        p.id === editingPaymentId
-          ? {
-              ...p,
-              title: editPayType,
-              amount: parseInt(editPayAmount) || 0,
-              description: editPayDescription,
-            }
-          : p
-      )
-    )
-    setShowEditModal(false)
+    updatePaymentMutation.mutate({
+      type: editPayType,
+      amount: parseInt(editPayAmount) || 0,
+      billToId: editPayBillTo || null
+    })
   }
+
+  const addPaymentMutation = useMutation({
+    mutationFn: (data: any) => api(`/projects/${project.id}/payments`, { method: 'POST', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+      setShowAddModal(false)
+      // Reset Form
+      setNewPayType('')
+      setNewPayAmount('')
+      setNewPayDescription('')
+      setNewPayStatus('MENUNGGU')
+    },
+    onError: (err: any) => {
+      alert('Gagal membuat tahap pembayaran: ' + err.message)
+    }
+  })
 
   const handleAddPaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -124,32 +180,17 @@ export function PaymentTab({ project }: PaymentTabProps) {
       return
     }
 
-    const newPayment: Payment = {
-      id: `pay-${Date.now()}`,
-      projectId: project.id,
-      type: 'DP',
+    addPaymentMutation.mutate({
+      type: newPayType,
       amount: parseInt(newPayAmount) || 0,
-      status: newPayStatus,
-      createdAt: new Date().toISOString().split('T')[0],
-      title: newPayType,
-      description: newPayDescription,
-    }
-
-    mockPayments.push(newPayment)
-    setPayments((prev) => [...prev, newPayment])
-    setShowAddModal(false)
-
-    // Reset Form
-    setNewPayType('')
-    setNewPayAmount('')
-    setNewPayDescription('')
-    setNewPayStatus('MENUNGGU')
+      description: newPayDescription
+    })
   }
 
   // Calculate dynamic summaries
   const totalContractValue = project.value
-  const totalMilestonePlanned = payments.reduce((sum, p) => sum + p.amount, 0)
-  const totalPaid = payments.filter((p) => p.status === 'LUNAS').reduce((sum, p) => sum + p.amount, 0)
+  const totalMilestonePlanned = payments.reduce((sum, p) => sum + parseFloat(p.amount || '0'), 0)
+  const totalPaid = payments.filter((p) => p.status === 'LUNAS').reduce((sum, p) => sum + parseFloat(p.amount || '0'), 0)
 
   return (
     <div className="space-y-6">
@@ -188,12 +229,14 @@ export function PaymentTab({ project }: PaymentTabProps) {
             Kelola termin pembayaran proyek, sesuaikan rincian, dan perbarui status pembayarannya secara manual.
           </p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors flex items-center gap-1.5"
-        >
-          <span>+</span> Tambah Tahap Pembayaran
-        </button>
+        {hasPayAdd && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors flex items-center gap-1.5"
+          >
+            <span>+</span> Tambah Tahap Pembayaran
+          </button>
+        )}
       </div>
 
       {/* Cards Grid */}
@@ -228,20 +271,24 @@ export function PaymentTab({ project }: PaymentTabProps) {
                     <span className={cn("text-[9px] font-bold px-2 py-0.5 rounded tracking-wider uppercase", badgeClass)}>
                       {displayStatus === 'PROSES_VERIFIKASI' ? 'PROSES' : displayStatus}
                     </span>
-                    <button
-                      onClick={() => handleOpenEditModal(pay)}
-                      className="text-muted-foreground hover:text-orange-600 transition-colors"
-                      title="Ubah Tahap"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeletePayment(pay.id)}
-                      className="text-muted-foreground hover:text-red-500 transition-colors"
-                      title="Hapus Tahap Pembayaran"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {hasPayAdd && (
+                      <button
+                        onClick={() => handleEditClick(pay)}
+                        className="text-muted-foreground hover:text-orange-600 transition-colors"
+                        title="Ubah Tahap"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {hasPayDel && (
+                      <button
+                        onClick={() => handleDeletePayment(pay.id)}
+                        className="text-muted-foreground hover:text-red-500 transition-colors"
+                        title="Hapus Tahap Pembayaran"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -250,13 +297,15 @@ export function PaymentTab({ project }: PaymentTabProps) {
                 
                 <div className="flex items-end justify-between gap-4">
                   <p className="text-xs text-muted-foreground flex-1">{cardDesc}</p>
-                  <button
-                    onClick={() => setPrintInvoicePayment(pay)}
-                    className="text-[10px] font-bold text-orange-600 hover:underline flex items-center gap-1 uppercase tracking-wider shrink-0"
-                    type="button"
-                  >
-                    CETAK INVOICE <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                  </button>
+                  {hasPayPrint && (
+                    <button
+                      onClick={() => setPrintInvoicePayment(pay)}
+                      className="text-[10px] font-bold text-orange-600 hover:underline flex items-center gap-1 uppercase tracking-wider shrink-0"
+                      type="button"
+                    >
+                      CETAK INVOICE <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -317,20 +366,26 @@ export function PaymentTab({ project }: PaymentTabProps) {
         <div>
           <h4 className="text-[10px] font-bold text-muted-foreground tracking-widest uppercase mb-2">TUJUAN TRANSFER BANK</h4>
           <div className="border border-border/60 rounded-lg p-4 bg-white flex justify-between items-center h-[90px]">
-            <div>
-              <p className="font-bold text-sm">DIGIBANK by DBS</p>
-              <p className="font-bold text-sm mb-1">1702945239</p>
-              <p className="text-[10px] text-muted-foreground italic">a/n Muhammad Nanang Rizaldi</p>
-            </div>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText('1702945239')
-                alert('Nomor rekening berhasil disalin!')
-              }}
-              className="text-sm font-bold text-orange-600 hover:underline"
-            >
-              Salin
-            </button>
+            {activeBank ? (
+              <>
+                <div>
+                  <p className="font-bold text-sm">{activeBank.bankName}</p>
+                  <p className="font-bold text-sm mb-1">{activeBank.accountNumber}</p>
+                  <p className="text-[10px] text-muted-foreground italic">a/n {activeBank.accountName}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(activeBank.accountNumber)
+                    alert('Nomor rekening berhasil disalin!')
+                  }}
+                  className="text-sm font-bold text-orange-600 hover:underline"
+                >
+                  Salin
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">Belum ada rekening aktif. Tambahkan di Settings → Rekening.</p>
+            )}
           </div>
         </div>
         <div>
@@ -897,6 +952,23 @@ export function PaymentTab({ project }: PaymentTabProps) {
                     onChange={(e) => setEditPayDescription(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-stone-200 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500 resize-none"
                   />
+                </div>
+                
+                {/* Bill To */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Ditangguhkan Kepada (Bill To)</label>
+                  <select
+                    value={editPayBillTo}
+                    onChange={(e) => setEditPayBillTo(e.target.value)}
+                    className="w-full h-9 px-3 rounded-lg border border-stone-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  >
+                    <option value="">-- Pilih User / PIC --</option>
+                    {users.map((u: any) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} {u.brand?.name ? `(${u.brand.name})` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

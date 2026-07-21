@@ -20,6 +20,9 @@ import {
 } from 'lucide-react'
 import type { Project } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface ConceptTabProps {
   project: Project
@@ -44,20 +47,40 @@ const mockContent = `<h2>Konsep Kampanye Ramadan</h2>
 </blockquote>`
 
 export function ConceptTab({ project }: ConceptTabProps) {
+  const { hasPermission } = usePermissions()
+  const hasConceptEdit = hasPermission('proj_concept_edit')
+  const hasDocPrint = hasPermission('proj_doc_print')
+
   const [activePlatform, setActivePlatform] = useState(project.platforms[0]?.id ?? '')
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  const queryClient = useQueryClient()
   
   // Track content per platform to prevent loss during switching
   const [platformContents, setPlatformContents] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {}
     project.platforms.forEach((pl) => {
-      initial[pl.id] = mockContent
+      const dbPage = (project as any).conceptPages?.find((c: any) => c.platformId === pl.id)
+      initial[pl.id] = dbPage ? dbPage.content : ''
     })
     return initial
   })
 
-
+  // Reload when project.conceptPages changes
+  useEffect(() => {
+    if (!(project as any).conceptPages?.length) return
+    setPlatformContents(prev => {
+      const updated = { ...prev }
+      project.platforms.forEach((pl) => {
+        const dbPage = (project as any).conceptPages?.find((c: any) => c.platformId === pl.id)
+        if (dbPage) {
+          updated[pl.id] = dbPage.content
+        }
+      })
+      return updated
+    })
+  }, [(project as any).conceptPages])
 
   // Track active style states for toolbar buttons highlighting
   const [activeStyles, setActiveStyles] = useState<Record<string, boolean>>({
@@ -170,6 +193,17 @@ export function ConceptTab({ project }: ConceptTabProps) {
     e.target.value = '' // Reset
   }
 
+  const saveConceptMutation = useMutation({
+    mutationFn: (data: { platformId: string; content: string }) => api(`/projects/${project.id}/concept`, { method: 'POST', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+      alert('Konsep kampanye berhasil disimpan!')
+    },
+    onError: (err: any) => {
+      alert('Gagal menyimpan konsep kampanye: ' + err.message)
+    }
+  })
+
   const handleSave = () => {
     if (editorRef.current) {
       const htmlValue = editorRef.current.innerHTML
@@ -177,8 +211,11 @@ export function ConceptTab({ project }: ConceptTabProps) {
         ...prev,
         [activePlatform]: htmlValue,
       }))
-
-      alert('Konsep kampanye berhasil disimpan!')
+      
+      saveConceptMutation.mutate({
+        platformId: activePlatform,
+        content: htmlValue
+      })
     }
   }
 
@@ -237,6 +274,7 @@ export function ConceptTab({ project }: ConceptTabProps) {
       {/* Editor */}
       <div className="border border-border rounded-xl overflow-hidden bg-white">
         {/* Toolbar */}
+        {hasConceptEdit && (
         <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border bg-muted/30 flex-wrap">
           {toolbarGroups.map((group, gIdx) => (
             <div key={gIdx} className="flex items-center gap-0.5">
@@ -340,12 +378,13 @@ export function ConceptTab({ project }: ConceptTabProps) {
             <option value="#fbcfe8">Pink Muda</option>
           </select>
         </div>
+        )}
 
         {/* Editor area — rich text simulation with direct native editing and status updates */}
         <div
           ref={editorRef}
-          className="min-h-96 p-6 focus:outline-none text-sm leading-relaxed prose prose-sm max-w-none scrollbar-thin overflow-y-auto bg-white"
-          contentEditable
+          className={cn("min-h-96 p-6 focus:outline-none text-sm leading-relaxed prose prose-sm max-w-none scrollbar-thin overflow-y-auto bg-white", !hasConceptEdit && "bg-gray-50/50")}
+          contentEditable={hasConceptEdit}
           suppressContentEditableWarning
           onKeyUp={updateActiveStyles}
           onMouseUp={updateActiveStyles}
@@ -361,33 +400,37 @@ export function ConceptTab({ project }: ConceptTabProps) {
           Platform Aktif: <strong className="text-foreground uppercase">{project.platforms.find((p) => p.id === activePlatform)?.name}</strong>
         </span>
         <div className="flex items-center gap-2 self-end sm:self-auto">
-          <button
-            onClick={() => {
-              // Commit editor's live HTML to state before firing window.print()
-              if (editorRef.current) {
-                const htmlValue = editorRef.current.innerHTML
-                setPlatformContents((prev) => ({
-                  ...prev,
-                  [activePlatform]: htmlValue,
-                }))
-              }
-              setTimeout(() => {
-                window.print()
-              }, 150)
-            }}
-            className="bg-white hover:bg-stone-100 border border-stone-250 text-stone-700 font-bold px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm text-xs cursor-pointer"
-            type="button"
-          >
-            Cetak PDF
-          </button>
-          <button
-            onClick={handleSave}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm text-xs cursor-pointer"
-            type="button"
-          >
-            <Save className="h-3.5 w-3.5" />
-            Simpan Konsep
-          </button>
+          {hasDocPrint && (
+            <button
+              onClick={() => {
+                // Commit editor's live HTML to state before firing window.print()
+                if (editorRef.current) {
+                  const htmlValue = editorRef.current.innerHTML
+                  setPlatformContents((prev) => ({
+                    ...prev,
+                    [activePlatform]: htmlValue,
+                  }))
+                }
+                setTimeout(() => {
+                  window.print()
+                }, 150)
+              }}
+              className="bg-white hover:bg-stone-100 border border-stone-250 text-stone-700 font-bold px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm text-xs cursor-pointer"
+              type="button"
+            >
+              Cetak PDF
+            </button>
+          )}
+          {hasConceptEdit && (
+            <button
+              onClick={handleSave}
+              className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm text-xs cursor-pointer"
+              type="button"
+            >
+              <Save className="h-3.5 w-3.5" />
+              Simpan Konsep
+            </button>
+          )}
         </div>
       </div>
 

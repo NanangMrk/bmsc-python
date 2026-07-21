@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import { 
   Settings, 
   
@@ -14,7 +16,9 @@ import {
   Trash2,
   Plus,
   Landmark,
-  Pencil
+  Pencil,
+  CheckCircle2,
+  Circle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -31,24 +35,19 @@ export default function SettingsPage() {
     address: 'RT 03 RW 01 Saripan Jepara\n59414'
   })
 
-  const [bankAccounts, setBankAccounts] = useState([
-    { id: '1', bankName: 'BCA', accountNumber: '1234567890', accountName: 'Nanang Mrk' }
-  ])
-  const [newBank, setNewBank] = useState({ bankName: '', accountNumber: '', accountName: '' })
-  const [editingBankId, setEditingBankId] = useState<string | null>(null)
-
   const [quoSettings, setQuoSettings] = useState({
     accentColor: '#ea580c',
     showSignature: true,
     useStamp: true,
     signatoryName: 'Nanang M.',
     signatoryRole: 'Chief Executive',
-    termsText: '1. Pembayaran DP minimal 50% sebelum project dimulai.\n2. Revisi maksimal 2 kali pada tahap offline editing.',
+    termsText: '1. Penawaran harga ini berlaku selama 30 hari sejak tanggal diterbitkan.\n2. Pekerjaan baru akan dimulai setelah disetujui secara tertulis atau dikeluarkannya Invoice uang muka (DP).',
     taxEnabled: true,
     taxName: 'PPN',
     taxPercent: 11,
     showBank: false,
-    selectedBankId: 'b1'
+    selectedBankId: 'b1',
+    bankInstruction: 'Pembayaran termin mengikuti kesepakatan kontrak. Mohon transfer ke rekening resmi di samping dan sertakan nomor quotation saat konfirmasi.'
   })
 
   const [invSettings, setInvSettings] = useState({
@@ -57,23 +56,133 @@ export default function SettingsPage() {
     useStamp: true,
     showBank: true,
     selectedBankId: 'b1',
-    signatoryName: 'Finance Dept',
-    signatoryRole: 'Finance & Accounting',
-    termsText: '1. Pembayaran harap dilakukan selambatnya 14 hari setelah invoice diterbitkan.\n2. Mohon sertakan Nomor Invoice pada berita transfer.\n3. Kirimkan bukti transfer ke finance@nanangmrk.com.',
+    signatoryName: 'NanangMrk',
+    signatoryRole: 'NanangMrk Channel',
+    termsText: '1. Invoice ini adalah sah diterbitkan oleh perusahaan.\n2. Tagihan ini berlaku sebagai kwitansi lunas yang sah apabila status tercantum LUNAS / PAID.',
     taxEnabled: true,
     taxName: 'PPN',
-    taxPercent: 11
+    taxPercent: 11,
+    bankInstruction: 'Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905'
   })
 
-  const handleSaveBank = (e: React.FormEvent) => {
+  const queryClient = useQueryClient()
+
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => api<any[]>('/bank-accounts')
+  })
+
+  const createBankMutation = useMutation({
+    mutationFn: (data: any) => api('/bank-accounts', { method: 'POST', data }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bank-accounts'] })
+  })
+
+  const updateBankMutation = useMutation({
+    mutationFn: ({ id, ...data }: any) => api(`/bank-accounts/${id}`, { method: 'PATCH', data }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bank-accounts'] })
+  })
+
+  const deleteBankMutation = useMutation({
+    mutationFn: (id: string) => api(`/bank-accounts/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bank-accounts'] })
+  })
+
+  const { data: globalSettings, isLoading: isLoadingSettings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => api<any>('/settings')
+  })
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: (data: any) => api('/settings', { method: 'PATCH', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      alert('Pengaturan berhasil disimpan!')
+    },
+    onError: (err: any) => {
+      alert('Gagal menyimpan pengaturan: ' + err.message)
+    }
+  })
+
+  useEffect(() => {
+    if (globalSettings) {
+      setFormData({
+        agencyName: globalSettings.agencyName || '',
+        corporateName: globalSettings.corporateName || '',
+        tagline: globalSettings.tagline || '',
+        email: globalSettings.email || '',
+        phone: globalSettings.phone || '',
+        building: globalSettings.building || '',
+        address: globalSettings.address || ''
+      })
+      setQuoSettings({
+        accentColor: globalSettings.quoAccentColor || '#ea580c',
+        showSignature: globalSettings.quoShowSignature ?? true,
+        useStamp: true,
+        signatoryName: globalSettings.quoSignatoryName || '',
+        signatoryRole: globalSettings.quoSignatoryRole || '',
+        termsText: globalSettings.quoTermsText || '',
+        taxEnabled: globalSettings.quoTaxEnabled ?? true,
+        taxName: globalSettings.quoTaxName || 'PPN',
+        taxPercent: globalSettings.quoTaxPercent ?? 11,
+        showBank: globalSettings.quoShowBank ?? false,
+        selectedBankId: 'b1',
+        bankInstruction: globalSettings.quoBankInstruction || 'Pembayaran termin mengikuti kesepakatan kontrak. Mohon transfer ke rekening resmi di samping dan sertakan nomor quotation saat konfirmasi.'
+      })
+      setInvSettings({
+        accentColor: globalSettings.invAccentColor || '#ea580c',
+        showSignature: globalSettings.invShowSignature ?? true,
+        useStamp: true,
+        showBank: globalSettings.invShowBank ?? true,
+        selectedBankId: 'b1',
+        signatoryName: globalSettings.invSignatoryName || '',
+        signatoryRole: globalSettings.invSignatoryRole || '',
+        termsText: globalSettings.invTermsText || '',
+        taxEnabled: globalSettings.invTaxEnabled ?? true,
+        taxName: globalSettings.invTaxName || 'PPN',
+        taxPercent: globalSettings.invTaxPercent ?? 11,
+        bankInstruction: globalSettings.invBankInstruction || 'Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905'
+      })
+    }
+  }, [globalSettings])
+
+  const handleSaveAllSettings = () => {
+    updateSettingsMutation.mutate({
+      ...formData,
+      quoAccentColor: quoSettings.accentColor,
+      quoShowSignature: quoSettings.showSignature,
+      quoSignatoryName: quoSettings.signatoryName,
+      quoSignatoryRole: quoSettings.signatoryRole,
+      quoTermsText: quoSettings.termsText,
+      quoTaxEnabled: quoSettings.taxEnabled,
+      quoTaxName: quoSettings.taxName,
+      quoTaxPercent: quoSettings.taxPercent,
+      quoShowBank: quoSettings.showBank,
+      quoBankInstruction: quoSettings.bankInstruction,
+      invAccentColor: invSettings.accentColor,
+      invShowSignature: invSettings.showSignature,
+      invSignatoryName: invSettings.signatoryName,
+      invSignatoryRole: invSettings.signatoryRole,
+      invTermsText: invSettings.termsText,
+      invTaxEnabled: invSettings.taxEnabled,
+      invTaxName: invSettings.taxName,
+      invTaxPercent: invSettings.taxPercent,
+      invShowBank: invSettings.showBank,
+      invBankInstruction: invSettings.bankInstruction
+    })
+  }
+
+  const [newBank, setNewBank] = useState({ bankName: '', accountNumber: '', accountName: '' })
+  const [editingBankId, setEditingBankId] = useState<string | null>(null)
+
+  const handleSaveBank = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newBank.bankName || !newBank.accountNumber || !newBank.accountName) return
     
     if (editingBankId) {
-      setBankAccounts(bankAccounts.map(b => b.id === editingBankId ? { ...newBank, id: editingBankId } : b))
+      await updateBankMutation.mutateAsync({ id: editingBankId, ...newBank })
       setEditingBankId(null)
     } else {
-      setBankAccounts([...bankAccounts, { ...newBank, id: Date.now().toString() }])
+      await createBankMutation.mutateAsync(newBank)
     }
     setNewBank({ bankName: '', accountNumber: '', accountName: '' })
   }
@@ -83,13 +192,17 @@ export default function SettingsPage() {
     setNewBank({ bankName: bank.bankName, accountNumber: bank.accountNumber, accountName: bank.accountName })
   }
 
+  const handleToggleBankActive = async (bank: any) => {
+    await updateBankMutation.mutateAsync({ id: bank.id, isActive: !bank.isActive })
+  }
+
   const handleCancelEdit = () => {
     setEditingBankId(null)
     setNewBank({ bankName: '', accountNumber: '', accountName: '' })
   }
   
   const handleDeleteBank = (id: string) => {
-    setBankAccounts(bankAccounts.filter(b => b.id !== id))
+    if (confirm('Hapus rekening ini?')) deleteBankMutation.mutate(id)
   }
 
   return (
@@ -107,7 +220,12 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
-
+        <button
+          onClick={handleSaveAllSettings}
+          className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+        >
+          Simpan Pengaturan
+        </button>
       </div>
 
       {/* Tabs */}
@@ -363,6 +481,18 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <button 
+                      onClick={() => handleToggleBankActive(bank)}
+                      className={cn("h-8 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors font-bold text-[10px] uppercase tracking-wider mr-2", 
+                        bank.isActive 
+                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100" 
+                          : "text-muted-foreground hover:bg-gray-100 border border-transparent"
+                      )}
+                      title={bank.isActive ? "Rekening Aktif Utama" : "Jadikan Utama"}
+                    >
+                      {bank.isActive ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+                      {bank.isActive ? "Aktif" : "Set Aktif"}
+                    </button>
+                    <button 
                       onClick={() => handleEditClick(bank)}
                       className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-orange-50 hover:text-orange-500 transition-colors"
                       title="Edit Rekening"
@@ -504,6 +634,15 @@ export default function SettingsPage() {
                         </option>
                       ))}
                     </select>
+
+                    <div className="mt-4">
+                      <FormTextarea 
+                        label="Instruksi Tata Cara Pembayaran"
+                        value={quoSettings.bankInstruction}
+                        onChange={(v) => setQuoSettings({...quoSettings, bankInstruction: v})}
+                        rows={3}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -522,7 +661,10 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex justify-end pt-4 border-t border-border/40">
-                <button className="bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold px-6 py-2.5 rounded-lg shadow-sm transition-colors">
+                <button 
+                  onClick={handleSaveAllSettings}
+                  className="bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold px-6 py-2.5 rounded-lg shadow-sm transition-colors"
+                >
                   Simpan Format Quotation
                 </button>
               </div>
@@ -630,8 +772,8 @@ export default function SettingsPage() {
                   <div className="border-2 border-gray-200 rounded-2xl p-6 bg-gray-50/20 grid md:grid-cols-2 gap-6 mt-10 leading-relaxed text-sm">
                     <div className="space-y-2">
                       <h4 className="font-extrabold uppercase tracking-widest text-[11px]" style={{ color: quoSettings.accentColor }}>TATA CARA PEMBAYARAN</h4>
-                      <p className="text-muted-foreground font-medium text-sm">
-                        Pembayaran termin mengikuti kesepakatan kontrak. Mohon transfer ke rekening resmi di samping dan sertakan nomor quotation saat konfirmasi.
+                      <p className="text-muted-foreground font-medium text-sm whitespace-pre-line">
+                        {quoSettings.bankInstruction}
                       </p>
                     </div>
                     <div className="md:border-l-2 border-gray-200 md:pl-6 space-y-1">
@@ -799,6 +941,15 @@ export default function SettingsPage() {
                         </option>
                       ))}
                     </select>
+                    
+                    <div className="mt-4">
+                      <FormTextarea 
+                        label="Instruksi Tata Cara Pembayaran"
+                        value={invSettings.bankInstruction}
+                        onChange={(v) => setInvSettings({...invSettings, bankInstruction: v})}
+                        rows={3}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -817,7 +968,10 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex justify-end pt-4 border-t border-border/40">
-                <button className="bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold px-6 py-2.5 rounded-lg shadow-sm transition-colors">
+                <button 
+                  onClick={handleSaveAllSettings}
+                  className="bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold px-6 py-2.5 rounded-lg shadow-sm transition-colors"
+                >
                   Simpan Format Invoice
                 </button>
               </div>
@@ -924,8 +1078,8 @@ export default function SettingsPage() {
                   <div className="border-2 border-gray-200 rounded-2xl p-6 bg-gray-50/20 grid md:grid-cols-2 gap-6 mt-10 leading-relaxed text-sm">
                     <div className="space-y-2">
                       <h4 className="font-extrabold uppercase tracking-widest text-[11px]" style={{ color: invSettings.accentColor }}>TATA CARA PEMBAYARAN</h4>
-                      <p className="text-muted-foreground font-medium text-sm">
-                        Pembayaran termin mengikuti kesepakatan kontrak. Mohon transfer ke rekening resmi di samping dan sertakan nomor invoice saat konfirmasi.
+                      <p className="text-muted-foreground font-medium text-sm whitespace-pre-line">
+                        {invSettings.bankInstruction}
                       </p>
                     </div>
                     <div className="md:border-l-2 border-gray-200 md:pl-6 space-y-1">
@@ -1024,6 +1178,22 @@ function FormField({ label, value, onChange, icon }: { label: string, value: str
           onChange={(e) => onChange(e.target.value)}
         />
       </div>
+    </div>
+  )
+}
+
+function FormTextarea({ label, value, onChange, rows = 3 }: { label: string, value: string, onChange: (v: string) => void, rows?: number }) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">
+        {label}
+      </label>
+      <textarea 
+        rows={rows}
+        className="w-full p-3 bg-gray-50/50 border border-border/80 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   )
 }

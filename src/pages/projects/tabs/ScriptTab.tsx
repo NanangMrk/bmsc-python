@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Plus, Trash2, Save, MessageSquare, Image as ImageIcon, X, Download, Send, Printer } from 'lucide-react'
 import type { Project } from '@/lib/mock-data'
-import { mockChatMessages, mockNotifications } from '@/lib/mock-data'
 import { useAuthStore } from '@/stores/auth.store'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/api'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface ScriptTabProps {
   project: Project
@@ -71,25 +72,112 @@ function parseTime(val: string): number {
 
 export function ScriptTab({ project }: ScriptTabProps) {
   const { user } = useAuthStore()
+  const { hasPermission } = usePermissions()
+  const hasAddSeg = hasPermission('proj_script_add_segment')
+  const hasDelSeg = hasPermission('proj_script_del_segment')
+  const hasAddRow = hasPermission('proj_script_add_row')
+  const hasDelRow = hasPermission('proj_script_del_row')
+  const hasComment = hasPermission('proj_script_comment')
+
   const [activePlatform, setActivePlatform] = useState(project.platforms[0]?.id ?? '')
   const [platformSegments, setPlatformSegments] = useState<Record<string, ScriptSegment[]>>(() => {
     const initial: Record<string, ScriptSegment[]> = {}
     project.platforms.forEach((pl) => {
-      initial[pl.id] = initialSegments.map((seg, sIdx) => ({
-        ...seg,
-        id: `s_${pl.id}_${sIdx}`,
-        rows: seg.rows.map((r, rIdx) => ({
-          ...r,
-          id: `r_${pl.id}_${sIdx}_${rIdx}`
+      // Load from project.scripts if available
+      const dbSegs = (project as any).scripts?.filter((s: any) => s.platformId === pl.id) || []
+      if (dbSegs.length > 0) {
+        initial[pl.id] = dbSegs.map((seg: any) => ({
+          id: seg.id,
+          name: seg.title,
+          desc: seg.subtitle || '',
+          rows: (seg.rows || []).map((r: any) => ({
+            id: r.id,
+            type: 'row' as const,
+            row: r.rowNumber,
+            audio: r.audioText || '',
+            visual: r.visualText || '',
+            image: r.imageUrl || '',
+            duration: r.duration || 0,
+            comments: (r.comments || []).map((c: any) => ({
+              id: c.id,
+              userId: c.userId,
+              userName: c.userName,
+              text: c.text,
+              createdAt: c.createdAt,
+            }))
+          }))
         }))
-      }))
+      } else {
+        initial[pl.id] = []
+      }
     })
     return initial
   })
+
+  // Reload from DB when project.scripts changes (e.g. after refetch)
+  useEffect(() => {
+    if (!(project as any).scripts?.length) return
+    setPlatformSegments(prev => {
+      const updated = { ...prev }
+      project.platforms.forEach((pl) => {
+        const dbSegs = (project as any).scripts?.filter((s: any) => s.platformId === pl.id) || []
+        if (dbSegs.length > 0) {
+          updated[pl.id] = dbSegs.map((seg: any) => ({
+            id: seg.id,
+            name: seg.title,
+            desc: seg.subtitle || '',
+            rows: (seg.rows || []).map((r: any) => ({
+              id: r.id,
+              type: 'row' as const,
+              row: r.rowNumber,
+              audio: r.audioText || '',
+              visual: r.visualText || '',
+              image: r.imageUrl || '',
+              duration: r.duration || 0,
+              comments: (r.comments || []).map((c: any) => ({
+                id: c.id,
+                userId: c.userId,
+                userName: c.userName,
+                text: c.text,
+                createdAt: c.createdAt,
+              }))
+            }))
+          }))
+        }
+      })
+      return updated
+    })
+  }, [(project as any).scripts])
+
+  // Sync imageUrls when scripts reload from DB
+  useEffect(() => {
+    const urls: Record<string, string> = {}
+    project.platforms.forEach((pl) => {
+      const dbSegs = (project as any).scripts?.filter((s: any) => s.platformId === pl.id) || []
+      dbSegs.forEach((seg: any) => {
+        (seg.rows || []).forEach((r: any) => {
+          if (r.imageUrl) urls[r.id] = r.imageUrl
+        })
+      })
+    })
+    if (Object.keys(urls).length > 0) setImageUrls(prev => ({ ...urls, ...prev }))
+  }, [(project as any).scripts])
   const segments = platformSegments[activePlatform] || []
   const [isDirty, setIsDirty] = useState(false)
-  // Image URLs keyed by row ID
-  const [imageUrls, setImageUrls] = useState<Record<string, string>>({})
+
+  // Initialize imageUrls from DB data
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>(() => {
+    const urls: Record<string, string> = {}
+    project.platforms.forEach((pl) => {
+      const dbSegs = (project as any).scripts?.filter((s: any) => s.platformId === pl.id) || []
+      dbSegs.forEach((seg: any) => {
+        (seg.rows || []).forEach((r: any) => {
+          if (r.imageUrl) urls[r.id] = r.imageUrl
+        })
+      })
+    })
+    return urls
+  })
   const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   // Comment state
@@ -112,15 +200,34 @@ export function ScriptTab({ project }: ScriptTabProps) {
     imageInputRef.current?.click()
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const url = ev.target?.result as string
-      if (url) setImageUrls(prev => ({ ...prev, [activeImageRowId.current]: url }))
+    const rowId = activeImageRowId.current
+
+    // Upload file to server
+    try {
+      const token = localStorage.getItem('token')
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('http://localhost:3000/api/upload/single', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      })
+      const data = await res.json()
+      if (data.url) {
+        setImageUrls(prev => ({ ...prev, [rowId]: `http://localhost:3000${data.url}` }))
+      }
+    } catch {
+      // fallback to local preview if upload fails
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        const url = ev.target?.result as string
+        if (url) setImageUrls(prev => ({ ...prev, [rowId]: url }))
+      }
+      reader.readAsDataURL(file)
     }
-    reader.readAsDataURL(file)
     e.target.value = ''
   }
 
@@ -147,78 +254,124 @@ export function ScriptTab({ project }: ScriptTabProps) {
     setActivePlatform(newPlId)
   }
 
-  // Collect all live DOM values and commit to state
-  const handleSave = useCallback(() => {
-    setPlatformSegments(prev => ({
-      ...prev,
-      [activePlatform]: prev[activePlatform].map(seg => ({
-        ...seg,
-        name: segNameRefs.current[seg.id]?.value ?? seg.name,
-        desc: segDescRefs.current[seg.id]?.value ?? seg.desc,
-        rows: seg.rows.map(r => {
-          if (r.type === 'banner') return r
-          return {
-            ...r,
-            audio: audioRefs.current[r.id]?.value ?? r.audio,
-            visual: visualRefs.current[r.id]?.value ?? r.visual,
-            duration: parseTime(durationRefs.current[r.id]?.value ?? String(r.duration)),
-          }
-        })
-      }))
-    }))
-    setIsDirty(false)
-    alert('Skrip berhasil disimpan!')
-  }, [activePlatform])
-
-  const handleCommentSubmit = () => {
-    if (!commentText.trim() || !user || !commentRowId) return
-    const content = `Pesan pada segment ${commentRowId.segName}, row ${commentRowId.rowName}: "${commentText.trim()}"`
-    
-    // Push to Chat
-    mockChatMessages.push({
-      id: `cm${Date.now()}`,
-      projectId: project.id,
-      userId: user.id,
-      user,
-      content,
-      createdAt: new Date().toISOString(),
-    })
-
-    // Push to Notifications
-    mockNotifications.push({
-      id: `n${Date.now()}`,
-      icon: '💬',
-      title: 'Komentar di Script',
-      desc: `${user.name}: "${commentText.trim()}"`,
-      createdAt: new Date().toISOString(),
-      read: false,
-    })
-
-    const newComment: RowComment = {
-      id: `rc${Date.now()}`,
-      userId: user.id,
-      userName: user.name,
-      text: commentText.trim(),
-      createdAt: new Date().toISOString()
-    }
-
-    setPlatformSegments(prev => ({
-      ...prev,
-      [activePlatform]: prev[activePlatform].map(seg => {
-        if (seg.id !== commentRowId.segId) return seg
+  // Collect all live DOM values, commit to state, then save to API
+  const handleSave = useCallback(async () => {
+    // Build updated segments synchronously from refs + current imageUrls
+    const currentPlatformSegs = platformSegments[activePlatform] || []
+    const updatedSegs: ScriptSegment[] = currentPlatformSegs.map(seg => ({
+      ...seg,
+      name: segNameRefs.current[seg.id]?.value ?? seg.name,
+      desc: segDescRefs.current[seg.id]?.value ?? seg.desc,
+      rows: seg.rows.map(r => {
+        if (r.type === 'banner') return r
         return {
-          ...seg,
-          rows: seg.rows.map(r => {
-            if (r.id !== commentRowId.rowId) return r
-            return { ...r, comments: [...(r.comments || []), newComment] }
-          })
+          ...r,
+          audio: audioRefs.current[r.id]?.value ?? r.audio,
+          visual: visualRefs.current[r.id]?.value ?? r.visual,
+          duration: parseTime(durationRefs.current[r.id]?.value ?? String(r.duration)),
+          image: imageUrls[r.id] ?? r.image, // include uploaded image URL
         }
       })
     }))
 
-    setCommentRowId(null)
-    setCommentText('')
-    alert('Komentar berhasil ditambahkan!')
+    // Update local state
+    setPlatformSegments(prev => ({ ...prev, [activePlatform]: updatedSegs }))
+
+    // Save to API
+    try {
+      const result: any = await api(`/projects/${project.id}/scripts/save`, {
+        method: 'POST',
+        data: { platformId: activePlatform, segments: updatedSegs }
+      })
+
+      // Update local state with real DB IDs returned from server
+      if (result?.segments && Array.isArray(result.segments)) {
+        const serverSegs: ScriptSegment[] = result.segments.map((seg: any, segIdx: number) => {
+          const localSeg = updatedSegs[segIdx]
+          return {
+            id: seg.id,
+            name: seg.title || localSeg?.name || '',
+            desc: seg.subtitle || localSeg?.desc || '',
+            rows: (seg.rows || []).map((r: any, rIdx: number) => {
+              const localRow = localSeg?.rows[rIdx]
+              return {
+                id: r.id,
+                type: 'row' as const,
+                row: r.rowNumber || localRow?.row || '',
+                audio: r.audioText || localRow?.audio || '',
+                visual: r.visualText || localRow?.visual || '',
+                image: r.imageUrl || imageUrls[localRow?.id ?? ''] || localRow?.image || '',
+                duration: r.duration || localRow?.duration || 0,
+                comments: localRow?.comments || [],
+              }
+            })
+          }
+        })
+        setPlatformSegments(prev => ({ ...prev, [activePlatform]: serverSegs }))
+      }
+
+      setIsDirty(false)
+      alert('Skrip berhasil disimpan!')
+    } catch (err: any) {
+      alert(`Gagal menyimpan skrip: ${err.message}`)
+    }
+  }, [activePlatform, project.id, platformSegments, imageUrls])
+
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+
+  const handleCommentSubmit = async () => {
+    if (!commentText.trim() || !commentRowId) return
+    if (!user) {
+      alert('Anda harus login untuk menambahkan komentar.')
+      return
+    }
+    // If rowId is not a valid UUID, it means the script hasn't been saved to DB yet
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(commentRowId.rowId)
+    if (!isUUID) {
+      alert('Simpan skrip terlebih dahulu sebelum menambahkan komentar.')
+      return
+    }
+    setIsSubmittingComment(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`http://localhost:3000/api/projects/${project.id}/scripts/rows/${commentRowId.rowId}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text: commentText.trim() }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || 'Gagal mengirim komentar')
+      }
+
+      const savedComment: RowComment = await res.json()
+
+      // Update local state with saved comment from DB
+      setPlatformSegments(prev => ({
+        ...prev,
+        [activePlatform]: prev[activePlatform].map(seg => {
+          if (seg.id !== commentRowId.segId) return seg
+          return {
+            ...seg,
+            rows: seg.rows.map(r => {
+              if (r.id !== commentRowId.rowId) return r
+              return { ...r, comments: [...(r.comments || []), savedComment] }
+            })
+          }
+        })
+      }))
+
+      setCommentText('')
+      // Keep modal open so user can see the new comment
+    } catch (err: any) {
+      alert(`Gagal menambahkan komentar: ${err.message}`)
+    } finally {
+      setIsSubmittingComment(false)
+    }
   }
 
 
@@ -359,7 +512,7 @@ export function ScriptTab({ project }: ScriptTabProps) {
                   placeholder="Deskripsi segment..."
                 />
               </div>
-              {segments.length > 1 && (
+              {segments.length > 1 && hasDelSeg && (
                 <button
                   onClick={() => deleteSegment(seg.id)}
                   className="absolute top-0 right-0 h-7 w-7 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
@@ -466,6 +619,7 @@ export function ScriptTab({ project }: ScriptTabProps) {
                     </div>
 
                     {/* Delete row */}
+                    {hasDelRow && (
                     <div className="w-[4%] flex items-start justify-end pl-1 pt-1">
                       <button
                         onClick={() => deleteRow(seg.id, row.id)}
@@ -475,6 +629,7 @@ export function ScriptTab({ project }: ScriptTabProps) {
                         <Trash2 className="h-3 w-3" />
                       </button>
                     </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -482,18 +637,22 @@ export function ScriptTab({ project }: ScriptTabProps) {
 
             {/* Per-segment action buttons */}
             <div className="flex items-center gap-4 mt-6 pt-5 border-t border-dashed border-border/50">
+              {hasAddRow && (
               <button
                 onClick={() => addRow(seg.id)}
                 className="text-orange-600 hover:text-orange-700 font-bold text-xs flex items-center gap-1.5 hover:bg-orange-50 px-3 py-1.5 rounded-lg transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" /> Row
               </button>
+              )}
+              {hasAddSeg && (
               <button
                 onClick={addSegment}
                 className="text-indigo-500 hover:text-indigo-700 font-bold text-xs flex items-center gap-1.5 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" /> Segment
               </button>
+              )}
             </div>
           </div>
         )
@@ -503,12 +662,14 @@ export function ScriptTab({ project }: ScriptTabProps) {
       {/* Bottom Bar */}
       <div className="bg-gray-50/50 border border-border/60 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between mt-4 gap-3 no-print">
         <div className="flex items-center gap-3">
+          {hasAddSeg && (
           <button
             onClick={addSegment}
             className="flex items-center gap-2 px-5 py-2.5 bg-white border border-orange-200 text-orange-600 rounded-full text-sm font-bold hover:bg-orange-50 transition-colors"
           >
             <Plus className="h-4 w-4" /> Tambah Segment
           </button>
+          )}
           {/* Simpan button */}
           <button
             onClick={handleSave}
@@ -576,8 +737,16 @@ export function ScriptTab({ project }: ScriptTabProps) {
                 </button>
               </div>
               <p className="text-sm text-muted-foreground mb-4 shrink-0">
-                Komentar dapat dilihat oleh tim project dan muncul di tab Chat serta Notifikasi.
+                Komentar dapat dilihat oleh tim project.
               </p>
+
+              {/* Warning if script not yet saved */}
+              {!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(commentRowId.rowId) && (
+                <div className="mb-4 shrink-0 bg-orange-50 border border-orange-200 text-orange-700 text-sm px-4 py-3 rounded-xl flex items-start gap-2">
+                  <span className="text-lg leading-none">⚠️</span>
+                  <span><strong>Simpan skrip terlebih dahulu</strong> sebelum menambahkan komentar. Klik tombol "Simpan Skrip" di bawah halaman.</span>
+                </div>
+              )}
 
               {/* Existing Comments List */}
               <div className="flex-1 overflow-y-auto min-h-[100px] max-h-[300px] mb-4 space-y-3 pr-2 scrollbar-thin">
@@ -603,18 +772,25 @@ export function ScriptTab({ project }: ScriptTabProps) {
                 <textarea
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Tulis komentar..."
-                  className="w-full min-h-[80px] p-3 rounded-xl border border-border bg-muted/50 text-sm resize-none focus:outline-none focus:border-orange-300 transition-colors mb-4"
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                      e.preventDefault()
+                      handleCommentSubmit()
+                    }
+                  }}
+                  placeholder={hasComment ? "Tulis komentar... (Ctrl+Enter untuk kirim)" : "Anda tidak memiliki akses untuk memberikan komentar."}
+                  className="w-full min-h-[80px] p-3 rounded-xl border border-border bg-muted/50 text-sm resize-none focus:outline-none focus:border-orange-300 transition-colors mb-4 disabled:opacity-60"
                   autoFocus
+                  disabled={isSubmittingComment || !hasComment}
                 />
                 <div className="flex justify-end">
                   <button
                     onClick={handleCommentSubmit}
-                    disabled={!commentText.trim()}
+                    disabled={!commentText.trim() || isSubmittingComment || !hasComment}
                     className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-colors"
                   >
                     <Send className="h-4 w-4" />
-                    Kirim Komentar
+                    {isSubmittingComment ? 'Mengirim...' : 'Kirim Komentar'}
                   </button>
                 </div>
               </div>
