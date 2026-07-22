@@ -1,11 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
-import { Zap, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Zap, Eye, EyeOff, AlertCircle, ChevronRight } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth.store'
 
-const demoAccounts = [
-  { label: 'Super Admin', email: 'admin@bms.com', color: 'bg-orange-50 text-orange-700 border-orange-200' },
-]
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuthStore()
@@ -38,9 +35,36 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Left panel — decorative */}
-      <div className="hidden lg:flex flex-col w-1/2 bg-slate-900 relative overflow-hidden p-12">
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Top Navigation Bar */}
+      <div className="w-full border-b border-border bg-background shrink-0 relative z-10 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between w-full">
+          <a href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+            <div className="h-8 w-8 rounded-lg bg-orange-500 flex items-center justify-center">
+              <Zap className="h-5 w-5 text-white" />
+            </div>
+            <span className="font-bold text-lg text-foreground">BMSC</span>
+          </a>
+          <div className="flex items-center gap-4">
+            <nav className="hidden md:flex items-center gap-6">
+              <a href="/#fitur" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Fitur</a>
+              <a href="/#alur-kerja" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Alur Kerja</a>
+              <a href="/#testimoni" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Testimoni</a>
+            </nav>
+            <button 
+              id="landing-login-btn" 
+              onClick={() => document.getElementById('email')?.focus()}
+              className="inline-flex items-center gap-1.5 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors shadow-sm shadow-orange-200"
+            >
+              Masuk <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 flex">
+        {/* Left panel — decorative */}
+        <div className="hidden lg:flex flex-col w-1/2 bg-slate-900 relative overflow-hidden p-12">
         <div className="absolute inset-0">
           <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-orange-500/20 rounded-full blur-3xl" />
           <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-orange-500/20 rounded-full blur-3xl" />
@@ -161,32 +185,9 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Demo accounts */}
-          <div className="mt-8">
-            <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">
-              Akun Demo (klik untuk mengisi)
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {demoAccounts.map((acc) => (
-                <button
-                  key={acc.email}
-                  id={`demo-${acc.label.toLowerCase().replace(' ', '-')}-btn`}
-                  type="button"
-                  onClick={() => fillDemo(acc.email)}
-                  className={`text-left px-3 py-2 rounded-lg border text-xs font-medium transition-all hover:shadow-sm ${acc.color}`}
-                >
-                  <p className="font-semibold">{acc.label}</p>
-                  <p className="opacity-70 truncate">{acc.email}</p>
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              Password demo: <code className="bg-muted px-1 py-0.5 rounded">password123</code>
-            </p>
-          </div>
         </div>
       </div>
+    </div>
     </div>
   )
 }
