@@ -5,7 +5,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 // GET /api/projects/:projectId/tasks?platformId=xxx
 export const getTasks = async (req: AuthRequest, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     const { platformId } = req.query;
 
     const where: any = { projectId };
@@ -26,7 +26,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
 // POST /api/projects/:projectId/tasks
 export const createTask = async (req: AuthRequest, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     const { platformId, title, assigneeId, status, deadline } = req.body;
 
     if (!platformId || !title) {
@@ -54,7 +54,7 @@ export const createTask = async (req: AuthRequest, res: Response) => {
 // PATCH /api/projects/:projectId/tasks/:taskId
 export const updateTask = async (req: AuthRequest, res: Response) => {
   try {
-    const { taskId } = req.params;
+    const taskId = req.params.taskId as string;
     const { title, assigneeId, status, deadline } = req.body;
 
     const task = await prisma.productionTask.update({
@@ -77,7 +77,7 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
 // DELETE /api/projects/:projectId/tasks/:taskId
 export const deleteTask = async (req: AuthRequest, res: Response) => {
   try {
-    const { taskId } = req.params;
+    const taskId = req.params.taskId as string;
 
     await prisma.productionTask.delete({ where: { id: taskId } });
     return res.json({ message: 'Task deleted' });

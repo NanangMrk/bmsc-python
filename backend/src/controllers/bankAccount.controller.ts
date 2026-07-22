@@ -29,7 +29,7 @@ export const createBankAccount = async (req: AuthRequest, res: Response) => {
 
 export const updateBankAccount = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const data = req.body;
     const account = await prisma.bankAccount.update({ where: { id }, data });
     return res.json(account);
@@ -41,7 +41,7 @@ export const updateBankAccount = async (req: AuthRequest, res: Response) => {
 
 export const deleteBankAccount = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await prisma.bankAccount.delete({ where: { id } });
     return res.json({ message: 'Deleted' });
   } catch (error) {

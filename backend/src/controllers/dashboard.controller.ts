@@ -106,7 +106,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
     });
 
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthlyRevenue = [];
+    const monthlyRevenue: any[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date();
       d.setMonth(d.getMonth() - i);

@@ -5,7 +5,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 // --- PAYMENT PHASE ---
 export const updatePaymentTermin = async (req: AuthRequest, res: Response) => {
   try {
-    const { terminId } = req.params;
+    const terminId = req.params.terminId as string;
     const { status, proofFile, type, amount, billToId } = req.body; // In a real app, proofFile would be handled by multer
 
     const updateData: any = {};
@@ -35,7 +35,7 @@ export const updatePaymentTermin = async (req: AuthRequest, res: Response) => {
 
 export const createPaymentTermin = async (req: AuthRequest, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     const { type, amount, description } = req.body;
 
     const payment = await prisma.paymentTermin.create({
@@ -57,7 +57,7 @@ export const createPaymentTermin = async (req: AuthRequest, res: Response) => {
 
 export const deletePaymentTermin = async (req: AuthRequest, res: Response) => {
   try {
-    const { terminId } = req.params;
+    const terminId = req.params.terminId as string;
     
     await prisma.paymentTermin.delete({
       where: { id: terminId }
@@ -73,7 +73,7 @@ export const deletePaymentTermin = async (req: AuthRequest, res: Response) => {
 // --- CONCEPT PHASE ---
 export const saveConceptPage = async (req: AuthRequest, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     const { platformId, content } = req.body;
 
     if (!platformId || !content) {
@@ -113,7 +113,7 @@ export const saveConceptPage = async (req: AuthRequest, res: Response) => {
 // --- SCRIPT PHASE ---
 export const createScriptSegment = async (req: AuthRequest, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     const { platformId, title, subtitle } = req.body;
 
     const segment = await prisma.scriptSegment.create({
@@ -134,7 +134,7 @@ export const createScriptSegment = async (req: AuthRequest, res: Response) => {
 
 export const addScriptRow = async (req: AuthRequest, res: Response) => {
   try {
-    const { segmentId } = req.params;
+    const segmentId = req.params.segmentId as string;
     const { rowNumber, audioText, visualText, duration, wordCount } = req.body;
 
     const row = await prisma.scriptRow.create({

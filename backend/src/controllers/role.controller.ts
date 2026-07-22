@@ -36,7 +36,7 @@ export const createRole = async (req: AuthRequest, res: Response) => {
 
 export const updateRole = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { name, permissions } = req.body;
 
     const role = await prisma.role.update({
@@ -56,7 +56,7 @@ export const updateRole = async (req: AuthRequest, res: Response) => {
 
 export const deleteRole = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     
     // Check if role is used by users
     const usersWithRole = await prisma.user.count({ where: { roleId: id } });

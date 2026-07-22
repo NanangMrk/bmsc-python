@@ -49,7 +49,7 @@ export const oembedProxy = async (req: AuthRequest, res: Response) => {
 // GET /api/projects/:projectId/uploads?platformId=xxx
 export const getUploadLinks = async (req: AuthRequest, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     const { platformId } = req.query;
 
     const where: any = { projectId };
@@ -70,7 +70,7 @@ export const getUploadLinks = async (req: AuthRequest, res: Response) => {
 // POST /api/projects/:projectId/uploads
 export const createUploadLink = async (req: AuthRequest, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     const { platformId, url, title, thumbnail } = req.body;
 
     if (!platformId || !url) {
@@ -97,7 +97,7 @@ export const createUploadLink = async (req: AuthRequest, res: Response) => {
 // DELETE /api/projects/:projectId/uploads/:linkId
 export const deleteUploadLink = async (req: AuthRequest, res: Response) => {
   try {
-    const { linkId } = req.params;
+    const linkId = req.params.linkId as string;
 
     await prisma.uploadLink.delete({ where: { id: linkId } });
     return res.json({ message: 'Link deleted' });

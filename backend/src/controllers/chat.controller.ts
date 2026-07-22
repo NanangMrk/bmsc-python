@@ -4,7 +4,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 
 export const getChatMessages = async (req: AuthRequest, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     
     const messages = await prisma.chatMessage.findMany({
       where: { projectId },
@@ -25,7 +25,7 @@ export const getChatMessages = async (req: AuthRequest, res: Response) => {
 
 export const sendChatMessage = async (req: AuthRequest, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     const { message, attachment } = req.body;
     const userId = req.user?.id;
 

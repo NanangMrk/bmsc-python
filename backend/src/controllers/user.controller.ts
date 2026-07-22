@@ -87,7 +87,7 @@ export const createUser = async (req: AuthRequest, res: Response) => {
 
 export const updateUserAccess = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { projectIds, quotationIds, invoiceIds } = req.body;
 
     // We do this in a transaction: delete old access, create new ones.
@@ -173,7 +173,7 @@ export const updateUserAccess = async (req: AuthRequest, res: Response) => {
 
 export const updateUser = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { name, email, phone, address, roleId, password } = req.body;
 
     const dataToUpdate: any = {};
@@ -184,7 +184,7 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
     if (roleId) dataToUpdate.roleId = roleId;
 
     if (password) {
-      const bcrypt = await import('bcryptjs');
+      const bcrypt = await import('bcrypt');
       dataToUpdate.password = await bcrypt.hash(password, 10);
     }
 
@@ -203,7 +203,7 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
 
 export const deleteUser = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     // Delete all related access records first
     await prisma.$transaction([

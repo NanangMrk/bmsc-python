@@ -39,8 +39,8 @@ export const authenticateToken = async (
 
     req.user = {
       id: user.id,
-      name: user.name,
-      email: user.email,
+      name: user.name as string,
+      email: user.email as string,
       role: user.role.name.toUpperCase().replace(/\s+/g, '_'),
       brandId: user.brandId
     };

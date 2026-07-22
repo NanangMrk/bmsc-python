@@ -20,7 +20,7 @@ export const createShipment = async (req: AuthRequest, res: Response) => {
 
 export const updateShipment = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const data = req.body;
     
     const shipment = await prisma.shipment.update({
@@ -36,7 +36,7 @@ export const updateShipment = async (req: AuthRequest, res: Response) => {
 
 export const deleteShipment = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await prisma.shipment.delete({ where: { id } });
     return res.json({ message: 'Shipment deleted' });
   } catch (error) {

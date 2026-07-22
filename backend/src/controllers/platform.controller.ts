@@ -36,7 +36,7 @@ export const createPlatform = async (req: Request, res: Response) => {
 
 export const updatePlatform = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { name, icon, idealCost } = req.body;
 
     const platform = await prisma.platform.update({
@@ -57,7 +57,7 @@ export const updatePlatform = async (req: Request, res: Response) => {
 
 export const deletePlatform = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await prisma.platform.delete({ where: { id } });
     return res.json({ message: 'Platform deleted' });
   } catch (error) {

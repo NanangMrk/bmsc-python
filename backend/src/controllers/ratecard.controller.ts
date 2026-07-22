@@ -38,7 +38,7 @@ export const createRateCard = async (req: Request, res: Response) => {
 
 export const updateRateCard = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { name, platformId, price, unit, published } = req.body;
 
     const rateCard = await prisma.rateCard.update({
@@ -61,7 +61,7 @@ export const updateRateCard = async (req: Request, res: Response) => {
 
 export const deleteRateCard = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await prisma.rateCard.delete({ where: { id } });
     return res.json({ message: 'Rate Card deleted' });
   } catch (error) {

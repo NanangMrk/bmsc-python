@@ -5,7 +5,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 // GET /api/projects/:id/scripts?platformId=xxx
 export const getScripts = async (req: AuthRequest, res: Response) => {
   try {
-    const { id: projectId } = req.params;
+    const projectId = req.params.id as string;
     const { platformId } = req.query;
 
     const where: any = { projectId };
@@ -36,7 +36,7 @@ export const getScripts = async (req: AuthRequest, res: Response) => {
 // POST /api/projects/:id/scripts/save  (upsert entire script for a platform)
 export const saveScripts = async (req: AuthRequest, res: Response) => {
   try {
-    const { id: projectId } = req.params;
+    const projectId = req.params.id as string;
     const { platformId, segments } = req.body;
 
     if (!platformId || !Array.isArray(segments)) {
@@ -96,7 +96,7 @@ export const saveScripts = async (req: AuthRequest, res: Response) => {
 // POST /api/scripts/rows/:rowId/comments
 export const addRowComment = async (req: AuthRequest, res: Response) => {
   try {
-    const { rowId } = req.params;
+    const rowId = req.params.rowId as string;
     const { text } = req.body;
     const userId = req.user?.id;
     const userName = req.user?.name || 'Unknown';
@@ -133,7 +133,8 @@ export const addRowComment = async (req: AuthRequest, res: Response) => {
 // DELETE /api/scripts/rows/:rowId/comments/:commentId
 export const deleteRowComment = async (req: AuthRequest, res: Response) => {
   try {
-    const { rowId, commentId } = req.params;
+    const rowId = req.params.rowId as string;
+    const commentId = req.params.commentId as string;
     const userId = req.user?.id;
 
     const comment = await prisma.rowComment.findUnique({ where: { id: commentId } });

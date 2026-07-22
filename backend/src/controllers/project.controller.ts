@@ -44,7 +44,7 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
 
 export const getProjectById = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const user = req.user;
 
     let whereClause: any = { id };
@@ -182,7 +182,7 @@ export const createProject = async (req: AuthRequest, res: Response) => {
 
 export const updateProject = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { name, brandId, startDate, deadline, totalValue, status, platformIds, picIds } = req.body;
 
     if (!name || !startDate || totalValue === undefined) {
@@ -240,7 +240,7 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
 
 export const updateProjectProgress = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { progress, phaseStatuses } = req.body;
 
     const project = await prisma.project.update({
@@ -257,7 +257,7 @@ export const updateProjectProgress = async (req: AuthRequest, res: Response) => 
 
 export const updateProjectStatus = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { status } = req.body;
 
     const project = await prisma.project.update({
@@ -274,7 +274,7 @@ export const updateProjectStatus = async (req: AuthRequest, res: Response) => {
 
 export const deleteProject = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const projectId = id as string;
     
     // We must delete dependent records first due to foreign keys.

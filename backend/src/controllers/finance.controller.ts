@@ -41,7 +41,7 @@ export const getQuotations = async (req: AuthRequest, res: Response) => {
 
 export const getQuotationById = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const quotation = await prisma.quotation.findUnique({
       where: { id },
       include: {
@@ -146,7 +146,7 @@ export const createQuotation = async (req: AuthRequest, res: Response) => {
 
 export const updateQuotation = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { title, description, items, total, status, note, userId } = req.body;
     
     const quotation = await prisma.quotation.findUnique({ where: { id } });
@@ -216,7 +216,7 @@ export const updateQuotation = async (req: AuthRequest, res: Response) => {
 
 export const deleteQuotation = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     
     const quotation = await prisma.quotation.findUnique({ where: { id } });
     if (!quotation) {
@@ -245,7 +245,7 @@ export const deleteQuotation = async (req: AuthRequest, res: Response) => {
 
 export const generateInvoice = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params; // quotationId
+    const id = req.params.id as string; // quotationId
     const { invoiceNumber } = req.body;
 
     const quotation = await prisma.quotation.findUnique({
@@ -352,7 +352,7 @@ export const getInvoices = async (req: AuthRequest, res: Response) => {
 
 export const createInvoice = async (req: AuthRequest, res: Response) => {
   try {
-    const { number, quotationId, brandId, projectId, total, status } = req.body;
+    const { number, quotationId, brandId, projectId, items, total, status } = req.body;
 
     const invoice = await prisma.invoice.create({
       data: {
@@ -376,7 +376,7 @@ export const createInvoice = async (req: AuthRequest, res: Response) => {
 
 export const updateInvoiceStatus = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { status, paymentProof } = req.body;
 
     const dataToUpdate: any = {};
@@ -397,7 +397,7 @@ export const updateInvoiceStatus = async (req: AuthRequest, res: Response) => {
 
 export const getInvoiceById = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const invoice: any = await prisma.invoice.findUnique({
       where: { id },
       include: {
@@ -474,7 +474,7 @@ export const createTransaction = async (req: AuthRequest, res: Response) => {
 
 export const deleteTransaction = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await prisma.financeTransaction.delete({
       where: { id }
     });

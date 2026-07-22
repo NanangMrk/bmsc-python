@@ -24,7 +24,7 @@ export const markAsRead = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     await prisma.appNotification.updateMany({
       where: { id, userId },
