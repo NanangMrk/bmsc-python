@@ -88,7 +88,7 @@ export default function ProjectsPage() {
   const filtered = rawProjects.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.brand.name.toLowerCase().includes(search.toLowerCase())
     const matchStatus = filterStatus === 'ALL' || p.status === filterStatus
-    const matchPlatform = filterPlatform === 'ALL' || p.platforms.some((pl) => pl.id === filterPlatform)
+    const matchPlatform = filterPlatform === 'ALL' || p.platforms.some((pl: any) => pl.id === filterPlatform)
     return matchSearch && matchStatus && matchPlatform
   })
 
