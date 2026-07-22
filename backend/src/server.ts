@@ -30,6 +30,7 @@ import scriptRoutes from './routes/script.routes';
 import chatRoutes from './routes/chat.routes';
 import settingsRoutes from './routes/settings.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import notificationRoutes from './routes/notification.routes';
 import path from 'path';
 
 // ... (other middlewares)
@@ -57,6 +58,7 @@ app.use('/api/projects/:id/scripts', scriptRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Basic route
 app.get('/api/health', (req, res) => {

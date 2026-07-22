@@ -29,6 +29,7 @@ model User {
   invoiceAccess  InvoiceUserAccess[]
   chatMessages   ChatMessage[]
   billedPayments PaymentTermin[]     @relation("PaymentBillTo")
+  notifications  AppNotification[]
 }
 
 model Role {
@@ -319,4 +320,15 @@ model FinanceTransaction {
   brand     Brand?   @relation(fields: [brandId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AppNotification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  icon      String
+  title     String
+  desc      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

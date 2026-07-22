@@ -2,7 +2,7 @@ import { Search, Bell, ChevronDown, LogOut, User, Settings, Shield } from 'lucid
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/stores/auth.store'
-import { mockNotifications } from '@/lib/mock-data'
+import { api } from '@/lib/api'
 import { Avatar } from '@/components/ui/Avatar'
 import { cn } from '@/lib/utils'
 
@@ -31,15 +31,45 @@ export function Topbar() {
   const location = useLocation()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const [notifs, setNotifs] = useState(mockNotifications)
+  const [notifs, setNotifs] = useState<any[]>([])
+
+  const fetchNotifs = async () => {
+    try {
+      const data = await api<any[]>('/notifications')
+      setNotifs(data)
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   useEffect(() => {
-    // Polling interval to auto-refresh notifications if we simulate a global state update
+    fetchNotifs()
+    // Polling interval to auto-refresh notifications
     const interval = setInterval(() => {
-      setNotifs([...mockNotifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
-    }, 2000)
+      fetchNotifs()
+    }, 10000)
     return () => clearInterval(interval)
   }, [])
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api('/notifications/read-all', { method: 'PUT' })
+      setNotifs(notifs.map((n) => ({ ...n, read: true })))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleNotifClick = async (id: string, isRead: boolean) => {
+    if (!isRead) {
+      try {
+        await api(`/notifications/${id}/read`, { method: 'PUT' })
+        setNotifs(notifs.map((n) => (n.id === id ? { ...n, read: true } : n)))
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
 
   const unreadCount = notifs.filter((n) => !n.read).length
 
@@ -107,8 +137,8 @@ export function Topbar() {
                   <div className="p-8 text-center text-sm text-muted-foreground">Tidak ada notifikasi</div>
                 )}
                 {notifs.map((n) => (
-                  <div key={n.id} className={cn("flex gap-3 p-4 hover:bg-muted/50 cursor-pointer", !n.read && "bg-orange-50/50")}>
-                    <span className="text-lg">{n.icon}</span>
+                  <div key={n.id} onClick={() => handleNotifClick(n.id, n.read)} className={cn("flex gap-3 p-4 hover:bg-muted/50 cursor-pointer", !n.read && "bg-orange-50/50")}>
+                    <span className="text-lg">{n.icon || '🔔'}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{n.title}</p>
                       <p className="text-xs text-muted-foreground truncate">{n.desc}</p>
@@ -118,8 +148,8 @@ export function Topbar() {
                 ))}
               </div>
               <div className="p-3 border-t border-border">
-                <button className="text-xs text-orange-500 font-medium w-full text-center hover:underline">
-                  Lihat semua notifikasi
+                <button onClick={handleMarkAllRead} className="text-xs text-orange-500 font-medium w-full text-center hover:underline">
+                  Tandai semua sudah dibaca
                 </button>
               </div>
             </div>

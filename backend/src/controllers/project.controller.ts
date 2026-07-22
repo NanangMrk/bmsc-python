@@ -138,6 +138,15 @@ export const createProject = async (req: AuthRequest, res: Response) => {
               userId
             }
           });
+          
+          await tx.appNotification.create({
+            data: {
+              userId,
+              icon: '📁',
+              title: 'Project Baru',
+              desc: `Project "${project.name}" telah dibuat dan Anda ditugaskan ke dalamnya.`
+            }
+          });
         }
       }
 
