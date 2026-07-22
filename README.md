@@ -1,6 +1,6 @@
 # BMSC - Agency Management System
 
-BMSC (Bintang Media Solusi Creativ) adalah aplikasi platform manajemen *agency* terintegrasi yang dirancang khusus untuk kreator konten dan *creative agency*. Sistem ini memusatkan seluruh kebutuhan operasional bisnis mulai dari manajemen proyek, kolaborasi naskah (*script*), pembuatan Quotation & Invoice yang kustomabel, hingga komunikasi langsung (*real-time chat*) dengan klien di dalam satu platform.
+BMSC (Brand Management System Creativ) adalah aplikasi platform manajemen *agency* terintegrasi yang dirancang khusus untuk kreator konten dan *creative agency*. Sistem ini memusatkan seluruh kebutuhan operasional bisnis mulai dari manajemen proyek, kolaborasi naskah (*script*), pembuatan Quotation & Invoice yang kustomabel, hingga komunikasi langsung (*real-time chat*) dengan klien di dalam satu platform.
 
 ## 🚀 Fitur Utama
 
@@ -100,3 +100,47 @@ Frontend akan berjalan di `http://localhost:5173`.
 
 ## 🔒 Keamanan
 Sistem ini menggunakan JWT berlapis dan pengecekan otorisasi berbasis _roles/permissions_ pada setiap _endpoint_ mutasi (*create*, *update*, *delete*). Pastikan Anda menyimpan `JWT_SECRET` dengan aman pada lingkungan _production_.
+
+---
+
+## 🐧 Linux / Production Deployment
+
+Untuk meng-deploy aplikasi ini di server Linux (VPS/Cloud) agar bisa diakses secara publik (bukan localhost):
+
+### 1. Konfigurasi Environment (`.env`)
+Pastikan Anda membuat file `.env` di dua tempat:
+**Di folder utama (Frontend):**
+```env
+VITE_API_URL=http://<IP_SERVER_ANDA>:3000/api
+VITE_BACKEND_URL=http://<IP_SERVER_ANDA>:3000
+```
+**Di folder `backend/`:**
+```env
+PORT=3000
+HOST=0.0.0.0
+DATABASE_URL="mysql://user:password@localhost:3306/bmsc_db"
+JWT_SECRET="rahasia-super-aman"
+```
+
+### 2. Menjalankan Backend (menggunakan PM2)
+```bash
+cd backend
+npm install
+npx prisma generate
+npx prisma db push
+npm run build
+npm install -g pm2
+pm2 start dist/server.js --name bmsc-backend
+```
+
+### 3. Menjalankan Frontend (menggunakan PM2 & Serve)
+```bash
+# Kembali ke folder root proyek
+cd ..
+npm install
+npm run build
+npm install -g serve
+pm2 start "serve -s dist -p 5173" --name bmsc-frontend
+```
+
+Sekarang aplikasi BMSC Anda bisa diakses dari jaringan luar/publik melalui `http://<IP_SERVER_ANDA>:5173`.

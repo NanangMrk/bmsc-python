@@ -5,7 +5,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { useAuthStore } from '@/stores/auth.store'
 import { cn } from '@/lib/utils'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, BACKEND_URL, API_URL } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 
 interface ChatTabProps {
@@ -68,7 +68,7 @@ export function ChatTab({ project }: ChatTabProps) {
       const token = localStorage.getItem('token')
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch('http://localhost:3000/api/upload/single', {
+      const res = await fetch(`${API_URL}/upload/single`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData
@@ -76,7 +76,7 @@ export function ChatTab({ project }: ChatTabProps) {
       const data = await res.json()
       if (data.url) {
         // Send a message with the attachment immediately
-        sendMessageMutation.mutate({ message: 'Mengirim file lampiran', attachment: `http://localhost:3000${data.url}` })
+        sendMessageMutation.mutate({ message: 'Mengirim file lampiran', attachment: `${BACKEND_URL}${data.url}` })
       }
     } catch (err) {
       console.error(err)

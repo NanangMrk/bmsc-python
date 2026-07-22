@@ -3,7 +3,7 @@ import { Plus, Trash2, Save, MessageSquare, Image as ImageIcon, X, Download, Sen
 import type { Project } from '@/lib/mock-data'
 import { useAuthStore } from '@/stores/auth.store'
 import { cn } from '@/lib/utils'
-import { api } from '@/lib/api'
+import { api, BACKEND_URL, API_URL } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 
 interface ScriptTabProps {
@@ -237,14 +237,14 @@ export function ScriptTab({ project }: ScriptTabProps) {
       const token = localStorage.getItem('token')
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch('http://localhost:3000/api/upload/single', {
+      const res = await fetch(`${API_URL}/upload/single`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData
       })
       const data = await res.json()
       if (data.url) {
-        setImageUrls(prev => ({ ...prev, [rowId]: `http://localhost:3000${data.url}` }))
+        setImageUrls(prev => ({ ...prev, [rowId]: `${BACKEND_URL}${data.url}` }))
       }
     } catch {
       // fallback to local preview if upload fails
@@ -361,7 +361,7 @@ export function ScriptTab({ project }: ScriptTabProps) {
     setIsSubmittingComment(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`http://localhost:3000/api/projects/${project.id}/scripts/rows/${commentRowId.rowId}/comments`, {
+      const res = await fetch(`${API_URL}/projects/${project.id}/scripts/rows/${commentRowId.rowId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

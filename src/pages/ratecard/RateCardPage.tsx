@@ -371,7 +371,7 @@ export default function RateCardPage() {
 
           {/* Copy Public Link */}
           <a
-            href={`/public/ratecard?profile=${selectedProfileId}`}
+            href={`${window.location.origin}/public/ratecard?profile=${selectedProfileId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="h-9 px-3 border border-stone-200 hover:bg-stone-50 rounded-lg text-xs font-bold text-stone-600 flex items-center gap-1.5 transition-all"

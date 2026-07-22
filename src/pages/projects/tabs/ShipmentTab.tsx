@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { useAuthStore } from '@/stores/auth.store'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, BACKEND_URL, API_URL } from '@/lib/api'
 
 interface ShipmentTabProps {
   project: Project
@@ -44,13 +44,13 @@ export function ShipmentTab({ project: _project }: ShipmentTabProps) {
     const token = localStorage.getItem('token')
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch('http://localhost:3000/api/upload/single', {
+    const res = await fetch(`${API_URL}/upload/single`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData
     })
     const data = await res.json()
-    return data.url ? `http://localhost:3000${data.url}` : null
+    return data.url ? `${BACKEND_URL}${data.url}` : null
   }
 
   const handleUploadResi = async (e: React.ChangeEvent<HTMLInputElement>) => {

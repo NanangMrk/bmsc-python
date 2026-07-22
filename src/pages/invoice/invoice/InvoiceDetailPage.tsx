@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Upload, CheckCircle2, Download, Share2, Trash2 } from 'lucide-react'
 // data fetched via API
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDate, formatDateShort, cn } from '@/lib/utils'
-import { useRef } from 'react'
-import { api } from '@/lib/api'
+import { api, BACKEND_URL, API_URL } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 
@@ -155,7 +154,7 @@ export default function InvoiceDetailPage() {
       // NOTE: api helper might try to stringify if not careful, but it supports FormData natively if we don't pass headers
       // Let's use standard fetch to be safe with FormData headers (boundary)
       const token = localStorage.getItem('token')
-      const res = await fetch('http://localhost:3000/api/upload/single', {
+      const res = await fetch(`${API_URL}/upload/single`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -460,16 +459,16 @@ export default function InvoiceDetailPage() {
               <div className="space-y-4">
                 <div className="p-3 bg-muted/30 print:bg-transparent rounded-lg flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <a href={`http://localhost:3000${invoice.paymentProof}`} target="_blank" rel="noopener noreferrer" className="block h-10 w-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 hover:opacity-80 transition-opacity">
+                    <a href={`${BACKEND_URL}${invoice.paymentProof}`} target="_blank" rel="noopener noreferrer" className="block h-10 w-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 hover:opacity-80 transition-opacity">
                       {invoice.paymentProof.match(/\.(jpeg|jpg|gif|png)$/i) ? (
-                        <img src={`http://localhost:3000${invoice.paymentProof}`} alt="Bukti Transfer" className="h-full w-full object-cover" />
+                        <img src={`${BACKEND_URL}${invoice.paymentProof}`} alt="Bukti Transfer" className="h-full w-full object-cover" />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center text-orange-600 font-bold text-xs">FILE</div>
                       )}
                     </a>
                     <div className="min-w-0 flex flex-col items-start">
                       <p className="text-sm font-medium truncate max-w-[120px]">Bukti Pembayaran</p>
-                      <a href={`http://localhost:3000${invoice.paymentProof}`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-orange-600 hover:underline">
+                      <a href={`${BACKEND_URL}${invoice.paymentProof}`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-orange-600 hover:underline">
                         Lihat / Download
                       </a>
                     </div>

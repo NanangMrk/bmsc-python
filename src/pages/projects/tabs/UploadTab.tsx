@@ -3,7 +3,7 @@ import { Link2, Plus, Trash2, ExternalLink, Youtube, Instagram, Loader2, Globe }
 import type { Project } from '@/lib/mock-data'
 import { Button } from '@/components/ui/Button'
 import { cn, formatDateShort } from '@/lib/utils'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 
 interface UploadTabProps {
@@ -51,7 +51,7 @@ async function fetchLinkMeta(url: string): Promise<{ title: string; thumbnail: s
     try {
       const token = localStorage.getItem('token')
       const res = await fetch(
-        `http://localhost:3000/api/projects/oembed-proxy?url=${encodeURIComponent(url)}`,
+        `${API_URL}/projects/oembed-proxy?url=${encodeURIComponent(url)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
       if (res.ok) {
@@ -66,7 +66,7 @@ async function fetchLinkMeta(url: string): Promise<{ title: string; thumbnail: s
   try {
     const token = localStorage.getItem('token')
     const res = await fetch(
-      `http://localhost:3000/api/projects/oembed-proxy?url=${encodeURIComponent(url)}`,
+      `${API_URL}/projects/oembed-proxy?url=${encodeURIComponent(url)}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     if (res.ok) {
