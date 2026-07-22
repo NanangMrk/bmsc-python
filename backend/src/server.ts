@@ -29,6 +29,7 @@ import bankAccountRoutes from './routes/bankAccount.routes';
 import scriptRoutes from './routes/script.routes';
 import chatRoutes from './routes/chat.routes';
 import settingsRoutes from './routes/settings.routes';
+import dashboardRoutes from './routes/dashboard.routes';
 import path from 'path';
 
 // ... (other middlewares)
@@ -55,6 +56,7 @@ app.use('/api/bank-accounts', bankAccountRoutes);
 app.use('/api/projects/:id/scripts', scriptRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Basic route
 app.get('/api/health', (req, res) => {

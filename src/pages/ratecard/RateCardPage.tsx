@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { mockRateCards, mockRateCardProfiles, mockPlatforms } from '@/lib/mock-data'
 import { formatCurrency, cn } from '@/lib/utils'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface RateCard {
   id: string
@@ -54,6 +55,9 @@ interface RateCardProfile {
 }
 
 export default function RateCardPage() {
+  const { hasPermission } = usePermissions()
+  const hasRateManage = hasPermission('rate_manage')
+
   // Profiles and Rate Cards state
   const [profiles, setProfiles] = useState<RateCardProfile[]>(mockRateCardProfiles)
   const [selectedProfileId, setSelectedProfileId] = useState(mockRateCardProfiles[0].id)
@@ -353,12 +357,14 @@ export default function RateCardPage() {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+            {hasRateManage && (
             <button
               onClick={handleCreateProfile}
               className="h-9 px-3 bg-stone-100 hover:bg-stone-200 text-stone-600 font-bold rounded-lg text-xs transition-all"
             >
               + Profil Baru
             </button>
+            )}
           </div>
 
           <div className="h-6 w-[1px] bg-stone-200" />
@@ -384,12 +390,14 @@ export default function RateCardPage() {
           </button>
 
           {/* Save Changes */}
+          {hasRateManage && (
           <button
             onClick={handleSaveChanges}
             className="h-9 px-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm shadow-orange-600/10 transition-all hover:scale-[1.01]"
           >
             <Save className="h-4 w-4" /> Simpan Perubahan
           </button>
+          )}
         </div>
       </div>
 
@@ -397,6 +405,7 @@ export default function RateCardPage() {
       <div className="flex-1 flex overflow-hidden">
         
         {/* LEFT COLUMN: Elementor Control Panel */}
+        {hasRateManage && (
         <div className="w-[380px] bg-white border-r border-stone-200 flex flex-col overflow-hidden shrink-0 shadow-sm">
           {/* Header Panel */}
           <div className="p-4 bg-stone-50 border-b border-stone-200 flex items-center gap-2">
@@ -879,6 +888,7 @@ export default function RateCardPage() {
 
           </div>
         </div>
+        )}
 
         {/* RIGHT COLUMN: Live View Mockup Window */}
         <div className="flex-1 bg-stone-100/50 p-6 flex flex-col overflow-hidden relative">

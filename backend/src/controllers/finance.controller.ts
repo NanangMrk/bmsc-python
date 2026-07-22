@@ -166,8 +166,14 @@ export const updateQuotation = async (req: AuthRequest, res: Response) => {
         }
       });
 
-
-
+      if (userId !== undefined) {
+        await tx.quotationUserAccess.deleteMany({ where: { quotationId: q.id } });
+        if (userId) {
+          await tx.quotationUserAccess.create({
+            data: { quotationId: q.id, userId }
+          });
+        }
+      }
       if (q.status === 'DISETUJUI') {
         const existingInvoice = await tx.invoice.findUnique({ where: { quotationId: q.id } });
         if (!existingInvoice) {
@@ -415,6 +421,65 @@ export const getInvoiceById = async (req: AuthRequest, res: Response) => {
 
     return res.json(invoice);
   } catch (error: any) {
+    console.error(error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// --- FINANCE TRANSACTIONS ---
+export const getTransactions = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user;
+    
+    let whereClause = {};
+    if (user && user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+      if (user.role === 'BRAND') {
+        whereClause = { brandId: user.brandId };
+      }
+    }
+
+    const transactions = await prisma.financeTransaction.findMany({
+      where: whereClause,
+      orderBy: { date: 'desc' }
+    });
+    return res.json(transactions);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const createTransaction = async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, category, type, amount, date, status, brandId } = req.body;
+
+    const transaction = await prisma.financeTransaction.create({
+      data: {
+        name,
+        category,
+        type,
+        amount: Number(amount),
+        date: new Date(date),
+        status: status || 'SUCCESS',
+        brandId: brandId || null
+      }
+    });
+
+    return res.status(201).json({ message: 'Transaction created', transaction });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const deleteTransaction = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.financeTransaction.delete({
+      where: { id }
+    });
+    return res.json({ message: 'Transaction deleted successfully' });
+  } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Internal server error' });
   }

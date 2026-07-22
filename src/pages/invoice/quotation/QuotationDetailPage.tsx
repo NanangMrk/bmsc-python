@@ -7,10 +7,15 @@ import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { usePermissions } from '@/hooks/usePermissions'
 
 export default function QuotationDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { hasPermission } = usePermissions()
+  const hasQuoCopyLink = hasPermission('quo_copy_link')
+  const hasQuoEditStatus = hasPermission('quo_edit_status')
+  const hasQuoPrint = hasPermission('quo_print')
   
   const queryClient = useQueryClient()
   
@@ -83,7 +88,8 @@ export default function QuotationDetailPage() {
           <ArrowLeft className="h-4 w-4" /> Kembali ke Aplikasi
         </button>
         <div className="flex items-center gap-2.5">
-          <Button
+          {hasQuoCopyLink && (
+            <Button
               variant="outline"
               size="sm"
               icon={isCopied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Share2 className="h-3.5 w-3.5" />}
@@ -96,8 +102,9 @@ export default function QuotationDetailPage() {
             >
               Salin Link Quotation
             </Button>
+          )}
 
-          {quotation.status === 'TERKIRIM' && !quotation.invoice && (
+          {quotation.status === 'TERKIRIM' && !quotation.invoice && hasQuoEditStatus && (
             <Button 
               size="sm" 
               icon={<FileText className="h-3.5 w-3.5" />}
@@ -117,13 +124,15 @@ export default function QuotationDetailPage() {
               Lihat Invoice
             </Button>
           )}
-          <Button 
-            className="bg-orange-600 hover:bg-orange-700 text-white border-0 shadow-sm text-xs font-semibold px-5 py-2"
-            icon={<Download className="h-3.5 w-3.5" />}
-            onClick={() => window.print()}
-          >
-            Cetak / Simpan PDF
-          </Button>
+          {hasQuoPrint && (
+            <Button 
+              className="bg-orange-600 hover:bg-orange-700 text-white border-0 shadow-sm text-xs font-semibold px-5 py-2"
+              icon={<Download className="h-3.5 w-3.5" />}
+              onClick={() => window.print()}
+            >
+              Cetak / Simpan PDF
+            </Button>
+          )}
         </div>
       </div>
 
@@ -198,10 +207,11 @@ export default function QuotationDetailPage() {
                   </div>
                   <span className="font-extrabold text-base text-foreground print:text-black">{settings.agencyName || 'NanangMrk'}</span>
                 </div>
-                <div className="text-xs text-muted-foreground print:text-black/70 space-y-0.5 leading-relaxed whitespace-pre-line">
-                  {settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}
-                  <br />
-                  {settings.email || 'finance@bmsc.id'} | {settings.phone || '+62 811 1234 567'}
+                <div className="text-xs text-muted-foreground print:text-black/70 space-y-0.5 leading-relaxed">
+                  {settings.corporateName && <p className="font-bold text-foreground print:text-black">{settings.corporateName}</p>}
+                  {settings.building && <p>{settings.building}</p>}
+                  <p className="whitespace-pre-line">{settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}</p>
+                  <p>{settings.email || 'finance@bmsc.id'} | {settings.phone || '+62 811 1234 567'}</p>
                 </div>
               </div>
 

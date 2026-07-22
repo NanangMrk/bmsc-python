@@ -478,9 +478,8 @@ export default function QuotationListPage() {
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-orange-600 uppercase tracking-widest">Detail Kampanye & Akses</h3>
             <div className="grid md:grid-cols-2 gap-4">
-              {!editingId && (
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase">Pilih User (Opsional)</label>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase">Pilih User (Opsional)</label>
                   <select 
                     value={selectedUserId || ''} 
                     onChange={(e) => setSelectedUserId(e.target.value)}
@@ -493,9 +492,8 @@ export default function QuotationListPage() {
                   </select>
                   <p className="text-[10px] text-muted-foreground mt-1.5">Otomatis melampirkan identitas Brand-nya.</p>
                 </div>
-              )}
               
-              <div className={!editingId ? "" : "md:col-span-2"}>
+              <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase">Judul Kampanye (Opsional)</label>
                 <input
                   type="text"

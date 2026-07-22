@@ -146,10 +146,11 @@ export default function PublicInvoicePage() {
               </div>
               <span className="font-extrabold text-base text-foreground">{settings.agencyName || 'NanangMrk'}</span>
             </div>
-            <div className="text-xs text-muted-foreground space-y-0.5 leading-relaxed whitespace-pre-line">
-              {settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}
-              <br />
-              {settings.email || 'finance@bmsc.id'} | {settings.phone || '+62 811 1234 567'}
+            <div className="text-xs text-muted-foreground space-y-0.5 leading-relaxed">
+              {settings.corporateName && <p className="font-bold text-foreground">{settings.corporateName}</p>}
+              {settings.building && <p>{settings.building}</p>}
+              <p className="whitespace-pre-line">{settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}</p>
+              <p>{settings.email || 'finance@bmsc.id'} | {settings.phone || '+62 811 1234 567'}</p>
             </div>
           </div>
 

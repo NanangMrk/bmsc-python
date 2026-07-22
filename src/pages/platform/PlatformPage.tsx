@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { formatCurrency } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface PlatformItem {
   id: string
@@ -19,6 +20,8 @@ interface PlatformItem {
 
 export default function PlatformPage() {
   const queryClient = useQueryClient()
+  const { hasPermission } = usePermissions()
+  const hasPlatManage = hasPermission('plat_manage')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   
@@ -149,6 +152,7 @@ export default function PlatformPage() {
           </p>
         </div>
         
+        {hasPlatManage && (
         <Button 
           onClick={openAddModal}
           className="bg-orange-600 hover:bg-orange-700 text-white rounded-full px-5 whitespace-nowrap flex-shrink-0" 
@@ -156,6 +160,7 @@ export default function PlatformPage() {
         >
           {editingId ? "Edit Platform" : "Tambah Platform Baru"}
         </Button>
+        )}
       </div>
 
       {/* Grid Cards */}
@@ -187,6 +192,7 @@ export default function PlatformPage() {
                     </span>
                   </div>
                 </div>
+                {hasPlatManage && (
                 <div className="flex items-center gap-1">
                   <button 
                     onClick={() => openEditModal(pl)}
@@ -201,6 +207,7 @@ export default function PlatformPage() {
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
+                )}
               </div>
 
               {/* Description */}
@@ -223,8 +230,11 @@ export default function PlatformPage() {
                 UBAH STATUS:
               </span>
               <button 
+                disabled={!hasPlatManage}
                 onClick={() => togglePlatformStatus(pl.id)}
                 className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded tracking-widest uppercase transition-colors ${
+                  !hasPlatManage ? 'opacity-50 cursor-not-allowed ' : ''
+                }${
                   pl.status === 'AKTIF'
                     ? 'bg-green-50 text-green-600 hover:bg-green-100'
                     : 'bg-stone-100 text-stone-500 hover:bg-stone-200'

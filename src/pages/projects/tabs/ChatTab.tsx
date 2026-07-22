@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Paperclip, AtSign } from 'lucide-react'
+import { Send, Paperclip, AtSign, Download, X } from 'lucide-react'
 import type { Project } from '@/lib/mock-data'
 import { Avatar } from '@/components/ui/Avatar'
 import { useAuthStore } from '@/stores/auth.store'
@@ -29,7 +29,10 @@ export function ChatTab({ project }: ChatTabProps) {
   const queryClient = useQueryClient()
   const [messages, setMessages] = useState<any[]>(() => (project as any).chatMessages || [])
   const [input, setInput] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Sync messages when project data updates (e.g., after sending a message)
   // Use project.id + length as stable dependency to avoid infinite loop
@@ -44,7 +47,7 @@ export function ChatTab({ project }: ChatTabProps) {
   }, [messages])
 
   const sendMessageMutation = useMutation({
-    mutationFn: (message: string) => api(`/chats/${project.id}`, { method: 'POST', data: { message } }),
+    mutationFn: (data: { message: string, attachment?: string }) => api(`/chats/${project.id}`, { method: 'POST', data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', project.id] })
     }
@@ -52,8 +55,36 @@ export function ChatTab({ project }: ChatTabProps) {
 
   const sendMessage = () => {
     if (!input.trim() || !user) return
-    sendMessageMutation.mutate(input.trim())
+    sendMessageMutation.mutate({ message: input.trim() })
     setInput('')
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      setIsUploading(true)
+      const token = localStorage.getItem('token')
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('http://localhost:3000/api/upload/single', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      })
+      const data = await res.json()
+      if (data.url) {
+        // Send a message with the attachment immediately
+        sendMessageMutation.mutate({ message: 'Mengirim file lampiran', attachment: `http://localhost:3000${data.url}` })
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Gagal mengupload file.')
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   // Group messages by date
@@ -99,6 +130,22 @@ export function ChatTab({ project }: ChatTabProps) {
                             : 'bg-muted text-foreground rounded-bl-sm'
                         )}
                       >
+                        {msg.attachment && (
+                          <div className="mb-2">
+                            {msg.attachment.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                              <img 
+                                src={msg.attachment} 
+                                alt="attachment" 
+                                className="max-w-[200px] rounded-lg border border-white/20 cursor-pointer hover:opacity-90 transition-opacity" 
+                                onClick={() => setPreviewImage(msg.attachment)}
+                              />
+                            ) : (
+                              <a href={msg.attachment} target="_blank" rel="noreferrer" className="underline font-bold text-xs flex items-center gap-1">
+                                <Paperclip className="h-3 w-3" /> Lihat Lampiran
+                              </a>
+                            )}
+                          </div>
+                        )}
                         {msg.message || msg.content}
                       </div>
                       <span className="text-[10px] text-muted-foreground mx-1">{formatTime(msg.createdAt)}</span>
@@ -115,9 +162,21 @@ export function ChatTab({ project }: ChatTabProps) {
       {/* Input area */}
       {hasChatSend ? (
       <div className="pt-3 border-t border-border mt-3">
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileChange} 
+          className="hidden" 
+          accept="image/*,application/pdf"
+        />
         <div className="flex items-end gap-2">
           <div className="flex items-center gap-1">
-            <button className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+              title="Kirim Gambar / Lampiran"
+            >
               <Paperclip className="h-4 w-4" />
             </button>
             <button className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
@@ -159,6 +218,41 @@ export function ChatTab({ project }: ChatTabProps) {
           Anda tidak memiliki izin untuk mengirim pesan.
         </p>
       </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center">
+            {/* Toolbar */}
+            <div className="absolute top-0 right-0 -translate-y-full pb-4 flex gap-3">
+              <a
+                href={previewImage}
+                download="preview-image.png"
+                className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full backdrop-blur-md transition-colors"
+                title="Unduh Gambar"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Download className="w-5 h-5" />
+              </a>
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full backdrop-blur-md transition-colors"
+                title="Tutup Preview"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Image */}
+            <img 
+              src={previewImage} 
+              alt="Preview Full" 
+              className="w-auto h-auto max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl ring-1 ring-white/20"
+            />
+          </div>
+        </div>
       )}
     </div>
   )

@@ -8,9 +8,12 @@ import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { usePermissions } from '@/hooks/usePermissions'
 
 export default function InvoiceListPage() {
   const navigate = useNavigate()
+  const { hasPermission } = usePermissions()
+  const hasInvEditStatus = hasPermission('inv_edit_status')
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('ALL')
   const [view, setView] = useState<'table' | 'grid'>('grid')
@@ -153,12 +156,14 @@ export default function InvoiceListPage() {
                       <button className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground">
                         <Eye className="h-3.5 w-3.5" />
                       </button>
+                      {hasInvEditStatus && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); openEditDrawer(inv); }}
                         className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -206,12 +211,14 @@ export default function InvoiceListPage() {
                   <button className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white transition-colors text-muted-foreground shadow-sm">
                     <Eye className="h-3.5 w-3.5" />
                   </button>
+                  {hasInvEditStatus && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); openEditDrawer(inv); }}
                     className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white transition-colors text-muted-foreground shadow-sm"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
+                  )}
                 </div>
               </div>
             </Card>

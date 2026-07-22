@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
+import { usePermissions } from '@/hooks/usePermissions'
 
 const roleLabels: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
@@ -21,6 +22,8 @@ const roleLabels: Record<string, string> = {
 
 export default function UsersPage() {
   const queryClient = useQueryClient()
+  const { hasPermission } = usePermissions()
+  const hasUserManage = hasPermission('user_manage')
   const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState('ALL')
   const [mappingUser, setMappingUser] = useState<any>(null)
@@ -246,7 +249,9 @@ export default function UsersPage() {
           <h2 className="text-lg font-bold">Daftar User</h2>
           <p className="text-muted-foreground text-sm mt-0.5">{filtered.length} dari {mockUsers.length} user</p>
         </div>
+        {hasUserManage && (
         <Button id="add-user-btn" icon={<Plus className="h-4 w-4" />} onClick={() => setShowAddModal(true)}>Tambah User</Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -307,6 +312,7 @@ export default function UsersPage() {
                 </td>
                 <td className="px-4 py-3.5 text-xs text-muted-foreground">{formatDateShort(user.createdAt)}</td>
                 <td className="px-4 py-3.5">
+                  {hasUserManage && (
                   <div className="flex items-center gap-1">
                     <button 
                       onClick={() => {
@@ -332,6 +338,7 @@ export default function UsersPage() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
+                  )}
                 </td>
               </tr>
             ))}

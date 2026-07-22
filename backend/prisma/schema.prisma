@@ -46,6 +46,7 @@ model Brand {
   projects   Project[]
   users      User[]
   quotations Quotation[]
+  financeTransactions FinanceTransaction[]
 }
 
 model Platform {
@@ -304,4 +305,18 @@ model BankAccount {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model FinanceTransaction {
+  id        String   @id @default(uuid())
+  name      String
+  category  String
+  type      String   // "INCOME" | "EXPENSE"
+  amount    Decimal
+  date      DateTime
+  status    String   // "SUCCESS" | "PENDING"
+  brandId   String?  // Optional, for multi-tenant mapping if needed
+  brand     Brand?   @relation(fields: [brandId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

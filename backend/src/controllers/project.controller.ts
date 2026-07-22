@@ -27,7 +27,7 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
         platforms: {
           include: { platform: true }
         },
-        payments: true,
+        payments: { include: { billTo: { include: { brand: true } } } },
         userAccess: {
           include: { user: { select: { id: true, name: true } } }
         }
@@ -64,7 +64,7 @@ export const getProjectById = async (req: AuthRequest, res: Response) => {
       include: {
         brand: true,
         platforms: { include: { platform: true } },
-        payments: true,
+        payments: { include: { billTo: { include: { brand: true } } } },
         shipments: true,
         conceptPages: true,
         scripts: { include: { rows: { include: { comments: { orderBy: { createdAt: 'asc' } } } } } },
@@ -174,7 +174,7 @@ export const createProject = async (req: AuthRequest, res: Response) => {
 export const updateProject = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, startDate, deadline, totalValue, status, platformIds, picIds } = req.body;
+    const { name, brandId, startDate, deadline, totalValue, status, platformIds, picIds } = req.body;
 
     if (!name || !startDate || totalValue === undefined) {
       return res.status(400).json({ message: 'Missing required fields' });
@@ -186,6 +186,7 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
         where: { id },
         data: {
           name,
+          brandId: brandId || null,
           startDate: new Date(startDate),
           deadline: deadline ? new Date(deadline) : null,
           totalValue: Number(totalValue),

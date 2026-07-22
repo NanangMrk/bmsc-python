@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePermissions } from '@/hooks/usePermissions'
 import {
   Plus,
   Search,
@@ -27,6 +28,7 @@ const phaseLabels = ['', 'Payment', 'Pengiriman', 'Ide & Konsep', 'Script', 'Pro
 
 export default function ProjectsPage() {
   const navigate = useNavigate()
+  const { hasPermission } = usePermissions()
   const queryClient = useQueryClient()
   const [view, setView] = useState<ViewMode>('grid')
   const [search, setSearch] = useState('')
@@ -75,6 +77,7 @@ export default function ProjectsPage() {
 
   // Form states for editing project
   const [editProjName, setEditProjName] = useState('')
+  const [editProjBrandId, setEditProjBrandId] = useState('')
   const [editProjPlatforms, setEditProjPlatforms] = useState<string[]>([])
   const [editProjStartDate, setEditProjStartDate] = useState('')
   const [editProjDeadline, setEditProjDeadline] = useState('')
@@ -141,6 +144,7 @@ export default function ProjectsPage() {
     e.stopPropagation()
     setEditingProjectId(proj.id)
     setEditProjName(proj.name)
+    setEditProjBrandId(proj.brandId || '')
     setEditProjPlatforms(proj.platforms.map((pl: any) => pl.platformId || pl.platform?.id))
     // Format dates to YYYY-MM-DD for input[type=date]
     setEditProjStartDate(new Date(proj.startDate).toISOString().split('T')[0])
@@ -163,6 +167,7 @@ export default function ProjectsPage() {
     }
     updateProjectMutation.mutate({
       name: editProjName,
+      brandId: editProjBrandId,
       platformIds: editProjPlatforms,
       startDate: new Date(editProjStartDate).toISOString(),
       deadline: new Date(editProjDeadline).toISOString(),
@@ -231,9 +236,11 @@ export default function ProjectsPage() {
               </button>
             </div>
 
-            <Button className="bg-orange-600 hover:bg-orange-700 text-white border-0 shadow-sm rounded-lg px-4" icon={<Plus className="h-4 w-4" />} onClick={() => setShowAddModal(true)}>
-              Project Baru
-            </Button>
+            {hasPermission('proj_create') && (
+              <Button className="bg-orange-600 hover:bg-orange-700 text-white border-0 shadow-sm rounded-lg px-4" icon={<Plus className="h-4 w-4" />} onClick={() => setShowAddModal(true)}>
+                Project Baru
+              </Button>
+            )}
           </div>
         </div>
       </Card>
@@ -324,7 +331,9 @@ export default function ProjectsPage() {
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Calendar className="h-3.5 w-3.5" /><span>{formatDateShort(proj.deadline)}</span></div>
                   <div className="flex items-center gap-2">
                     <button className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-orange-650 transition-colors" onClick={(e) => handleOpenEditModal(proj, e)} title="Edit Project"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-red-500 transition-colors" onClick={(e) => handleDeleteProject(proj, e)} title="Hapus Project"><Trash2 className="h-3.5 w-3.5" /></button>
+                    {hasPermission('proj_delete') && (
+                      <button className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-red-500 transition-colors" onClick={(e) => handleDeleteProject(proj, e)} title="Hapus Project"><Trash2 className="h-3.5 w-3.5" /></button>
+                    )}
                     <button className="h-6 w-6 flex items-center justify-center bg-orange-50 text-orange-600 hover:bg-orange-100 rounded transition-colors ml-1" onClick={() => navigate(`/projects/${proj.id}`)}><ArrowRight className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
@@ -360,7 +369,9 @@ export default function ProjectsPage() {
                     <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1.5">
                         <button className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-orange-600 rounded hover:bg-stone-100 transition-colors" onClick={(e) => handleOpenEditModal(proj, e)} title="Edit Project"><Pencil className="h-4 w-4" /></button>
-                        <button onClick={(e) => handleDeleteProject(proj, e)} className="text-muted-foreground hover:text-red-600 transition-colors" title="Hapus"><Trash2 className="h-4 w-4" /></button>
+                        {hasPermission('proj_delete') && (
+                          <button onClick={(e) => handleDeleteProject(proj, e)} className="text-muted-foreground hover:text-red-600 transition-colors" title="Hapus"><Trash2 className="h-4 w-4" /></button>
+                        )}
                         <button className="h-7 w-7 flex items-center justify-center bg-orange-50 text-orange-600 hover:bg-orange-100 rounded transition-colors" onClick={() => navigate(`/projects/${proj.id}`)} title="Detail Project"><ArrowRight className="h-4 w-4" /></button>
                       </div>
                     </td>
@@ -385,6 +396,16 @@ export default function ProjectsPage() {
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Nama Project</label>
                   <input type="text" required placeholder="Contoh: Campaign Ramadhan 2025" value={newProjName} onChange={(e) => setNewProjName(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-stone-200 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500" />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Brand Induk</label>
+                  <select value={newProjBrandId} onChange={(e) => setNewProjBrandId(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-stone-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-500">
+                    <option value="">-- Tanpa Brand --</option>
+                    {brands.map((b: any) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-1">
@@ -509,14 +530,24 @@ export default function ProjectsPage() {
                     )}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Status</label>
-                    <select value={editProjStatus} onChange={(e) => setEditProjStatus(e.target.value as any)} className="w-full h-9 px-3 rounded-lg border border-stone-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-500">
-                      <option value="DRAFT">Draft</option>
-                      <option value="BERJALAN">Berjalan</option>
-                      <option value="PROSES_VERIFIKASI">Proses Verifikasi</option>
-                      <option value="SELESAI">Selesai</option>
+                    <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Brand Induk</label>
+                    <select value={editProjBrandId} onChange={(e) => setEditProjBrandId(e.target.value)} disabled={!canEdit} className={cn("w-full h-9 px-3 rounded-lg border border-stone-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-500", !canEdit && "cursor-not-allowed opacity-70")}>
+                      <option value="">-- Tanpa Brand --</option>
+                      {brands.map((b: any) => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
                     </select>
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Status Project</label>
+                  <select value={editProjStatus} onChange={(e) => setEditProjStatus(e.target.value as any)} disabled={!hasPermission('proj_edit_status')} className={cn("w-full h-9 px-3 rounded-lg border border-stone-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-500", !hasPermission('proj_edit_status') && "cursor-not-allowed opacity-70")}>
+                    <option value="DRAFT">Draft</option>
+                    <option value="BERJALAN">Berjalan</option>
+                    <option value="PROSES_VERIFIKASI">Proses Verifikasi</option>
+                    <option value="SELESAI">Selesai</option>
+                  </select>
                 </div>
 
                 <div className="space-y-1">

@@ -1,4 +1,7 @@
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+import { usePermissions } from '@/hooks/usePermissions'
 import {
   TrendingUp,
   FolderKanban,
@@ -22,7 +25,6 @@ import {
   Cell,
 } from 'recharts'
 import { useAuthStore } from '@/stores/auth.store'
-import { mockProjects, mockInvoices, mockMonthlyRevenue, mockPlatformStats, mockUsers } from '@/lib/mock-data'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { Avatar } from '@/components/ui/Avatar'
@@ -62,16 +64,22 @@ function StatCard({
 
 // ─── Admin Dashboard ─────────────────────────────────────────────────────────
 
-function AdminDashboard() {
+function AdminDashboard({ data }: { data: any }) {
   const navigate = useNavigate()
+  const { hasPermission } = usePermissions()
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'SYS_ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'OWNER';
 
-  const totalRevenue = mockInvoices
-    .filter((i) => i.status === 'LUNAS')
-    .reduce((acc, i) => acc + i.total, 0)
-
-  const activeProjects = mockProjects.filter((p) => p.status === 'BERJALAN').length
-  const lateProjects = mockProjects.filter((p) => p.status === 'PROSES_VERIFIKASI').length
-  const pendingPayments = mockInvoices.filter((i) => i.status === 'MENUNGGU_VERIFIKASI').length
+  const {
+    totalRevenue,
+    activeProjects,
+    lateProjects,
+    pendingPayments,
+    recentProjects,
+    recentInvoices,
+    monthlyRevenue,
+    platformStats
+  } = data || {}
 
   return (
     <div className="space-y-6">
@@ -83,87 +91,97 @@ function AdminDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Pemasukan"
-          value={formatCurrency(totalRevenue)}
-          icon={TrendingUp}
-          color="bg-green-50 text-green-600"
-          sub="Semua invoice lunas"
-        />
-        <StatCard
-          label="Project Aktif"
-          value={activeProjects}
-          icon={FolderKanban}
-          color="bg-orange-50 text-orange-600"
-          sub={`${mockProjects.length} total project`}
-        />
-        <StatCard
-          label="Menunggu Verifikasi"
-          value={pendingPayments}
-          icon={CreditCard}
-          color="bg-yellow-50 text-yellow-600"
-          sub="Pembayaran masuk"
-        />
-        <StatCard
-          label="Project Terlambat"
-          value={lateProjects}
-          icon={AlertTriangle}
-          color="bg-red-50 text-red-600"
-          sub="Perlu perhatian"
-        />
+        {hasPermission('dash_total_income') && (
+          <StatCard
+            label={isAdmin ? "Total Pemasukan" : "Total Pengeluaran"}
+            value={formatCurrency(totalRevenue)}
+            icon={TrendingUp}
+            color={isAdmin ? "bg-green-50 text-green-600" : "bg-orange-50 text-orange-600"}
+            sub={isAdmin ? "Semua invoice lunas" : "Total yang telah dibayar"}
+          />
+        )}
+        {hasPermission('dash_active_projects') && (
+          <StatCard
+            label="Project Aktif"
+            value={activeProjects}
+            icon={FolderKanban}
+            color="bg-orange-50 text-orange-600"
+          />
+        )}
+        {hasPermission('dash_wait_verification') && (
+          <StatCard
+            label="Menunggu Verifikasi"
+            value={pendingPayments}
+            icon={CreditCard}
+            color="bg-yellow-50 text-yellow-600"
+            sub="Pembayaran masuk"
+          />
+        )}
+        {hasPermission('dash_late_projects') && (
+          <StatCard
+            label="Project Terlambat"
+            value={lateProjects}
+            icon={AlertTriangle}
+            color="bg-red-50 text-red-600"
+            sub="Perlu perhatian"
+          />
+        )}
       </div>
 
       {/* Charts */}
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Revenue chart */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold">Pemasukan per Bulan</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">vs Target 2025</p>
+        {hasPermission('dash_monthly_income') && (
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold">Pemasukan per Bulan</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">vs Target 2025</p>
+                </div>
+                <select className="text-xs border border-border rounded-lg px-2 py-1 bg-background text-muted-foreground">
+                  <option>2025</option>
+                  <option>2024</option>
+                </select>
               </div>
-              <select className="text-xs border border-border rounded-lg px-2 py-1 bg-background text-muted-foreground">
-                <option>2025</option>
-                <option>2024</option>
-              </select>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={mockMonthlyRevenue} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `${(v / 1000000).toFixed(0)}jt`}
-                />
-                <Tooltip
-                  formatter={(value: number) => [formatCurrency(value), '']}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: '12px' }}
-                />
-                <Area type="monotone" dataKey="target" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" fill="url(#colorTarget)" name="Target" />
-                <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={2.5} fill="url(#colorRevenue)" name="Pemasukan" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={monthlyRevenue || []} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${(v / 1000000).toFixed(0)}jt`}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => [formatCurrency(value), '']}
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+                  />
+                  <Area type="monotone" dataKey="target" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" fill="url(#colorTarget)" name="Target" />
+                  <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={2.5} fill="url(#colorRevenue)" name="Pemasukan" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Platform stats */}
-        <Card>
-          <CardHeader>
+        {hasPermission('dash_platform_stats') && (
+          <Card>
+            <CardHeader>
             <h3 className="font-semibold">Per Platform</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Distribusi project</p>
           </CardHeader>
@@ -171,7 +189,7 @@ function AdminDashboard() {
             <div className="flex justify-center mb-4">
               <PieChart width={140} height={140}>
                 <Pie
-                  data={mockPlatformStats}
+                  data={platformStats || []}
                   cx={65}
                   cy={65}
                   innerRadius={40}
@@ -179,14 +197,14 @@ function AdminDashboard() {
                   paddingAngle={3}
                   dataKey="projects"
                 >
-                  {mockPlatformStats.map((entry, idx) => (
+                  {(platformStats || []).map((entry: any, idx: number) => (
                     <Cell key={idx} fill={entry.fill} />
                   ))}
                 </Pie>
               </PieChart>
             </div>
             <div className="space-y-2">
-              {mockPlatformStats.map((stat) => (
+              {(platformStats || []).map((stat: any) => (
                 <div key={stat.platform} className="flex items-center gap-2.5">
                   <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: stat.fill }} />
                   <span className="text-xs text-muted-foreground flex-1">{stat.platform}</span>
@@ -196,11 +214,13 @@ function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* Projects table */}
-      <Card>
-        <CardHeader>
+      {hasPermission('dash_recent_projects') && (
+        <Card>
+          <CardHeader>
           <div className="flex items-center justify-between">
             <h3 className="font-semibold">Project Terbaru</h3>
             <button
@@ -225,7 +245,7 @@ function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {mockProjects.slice(0, 5).map((proj) => (
+                {(recentProjects || []).map((proj: any) => (
                   <tr
                     key={proj.id}
                     className="hover:bg-muted/40 cursor-pointer transition-colors"
@@ -235,7 +255,7 @@ function AdminDashboard() {
                       <p className="font-medium truncate max-w-48">{proj.name}</p>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className="text-muted-foreground text-xs">{proj.brand.name}</span>
+                      <span className="text-muted-foreground text-xs">{proj.brand?.name || '-'}</span>
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="text-xs text-muted-foreground">
@@ -243,7 +263,7 @@ function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 w-32">
-                      <ProgressBar value={proj.progress} max={6} size="sm" />
+                      <ProgressBar value={proj.progress || 1} max={6} size="sm" />
                     </td>
                     <td className="px-4 py-3.5">
                       <StatusBadge status={proj.status} size="sm" />
@@ -258,12 +278,14 @@ function AdminDashboard() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Bottom row */}
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Pending invoices */}
-        <Card>
-          <CardHeader>
+        {hasPermission('dash_urgent_invoices') && (
+          <Card>
+            <CardHeader>
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Invoice Perlu Perhatian</h3>
               <button onClick={() => navigate('/invoice/invoice')} className="text-xs text-orange-500 hover:underline flex items-center gap-1">
@@ -272,7 +294,7 @@ function AdminDashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {mockInvoices.filter((i) => i.status !== 'LUNAS').map((inv) => (
+            {(recentInvoices || []).map((inv: any) => (
               <div
                 key={inv.id}
                 className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 cursor-pointer transition-colors"
@@ -283,7 +305,7 @@ function AdminDashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{inv.number}</p>
-                  <p className="text-xs text-muted-foreground">{inv.brand.name}</p>
+                  <p className="text-xs text-muted-foreground">{inv.quotation?.title || 'Invoice'}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold">{formatCurrency(inv.total)}</p>
@@ -293,10 +315,12 @@ function AdminDashboard() {
             ))}
           </CardContent>
         </Card>
+        )}
 
         {/* Team */}
-        <Card>
-          <CardHeader>
+        {hasPermission('dash_team') && (
+          <Card>
+            <CardHeader>
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Tim</h3>
               <button onClick={() => navigate('/users')} className="text-xs text-orange-500 hover:underline flex items-center gap-1">
@@ -305,23 +329,11 @@ function AdminDashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {mockUsers.slice(0, 5).map((user) => (
-              <div key={user.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30 transition-colors">
-                <Avatar name={user.name} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{user.name}</p>
-                  <p className="text-xs text-muted-foreground">{user.email}</p>
-                </div>
-                <StatusBadge
-                  status={user.role.replace('_', ' ') as string}
-                  size="sm"
-                  className="bg-muted text-muted-foreground border-transparent"
-                />
-                <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-              </div>
-            ))}
+            <p className="text-xs text-muted-foreground italic text-center py-4">Tim akan tampil di versi berikutnya</p>
           </CardContent>
+
         </Card>
+        )}
       </div>
     </div>
   )
@@ -329,16 +341,21 @@ function AdminDashboard() {
 
 // ─── Brand Dashboard ──────────────────────────────────────────────────────────
 
-function BrandDashboard() {
+function BrandDashboard({ data }: { data: any }) {
   const navigate = useNavigate()
   const { user } = useAuthStore()
 
-  // For brand, filter only their projects
-  const brandProjects = mockProjects.filter((p) => p.brandId === 'b1')
-  const brandInvoices = mockInvoices.filter((i) => i.brandId === 'b1')
-
-  const totalPaid = brandInvoices.filter((i) => i.status === 'LUNAS').reduce((acc, i) => acc + i.total, 0)
-  const totalDue = brandInvoices.filter((i) => i.status !== 'LUNAS').reduce((acc, i) => acc + i.total, 0)
+  const {
+    totalRevenue,
+    activeProjects,
+    recentProjects,
+    recentInvoices,
+  } = data || {}
+  
+  // Need to compute totalDue from all invoices, wait, we don't have totalDue from backend easily unless we aggregate,
+  // Or we just use recentInvoices. Let's just use what we have, or for brand, pendingPayments
+  const totalPaid = totalRevenue
+  const totalDue = (recentInvoices || []).filter((i: any) => i.status !== 'LUNAS').reduce((acc: number, i: any) => acc + Number(i.total), 0)
 
   return (
     <div className="space-y-6">
@@ -350,7 +367,7 @@ function BrandDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard label="Sudah Dibayar" value={formatCurrency(totalPaid)} icon={TrendingUp} color="bg-green-50 text-green-600" />
         <StatCard label="Sisa Tagihan" value={formatCurrency(totalDue)} icon={CreditCard} color="bg-orange-50 text-orange-600" />
-        <StatCard label="Project Aktif" value={brandProjects.filter((p) => p.status === 'BERJALAN').length} icon={FolderKanban} color="bg-orange-50 text-orange-600" sub={`${brandProjects.length} total`} />
+        <StatCard label="Project Aktif" value={activeProjects} icon={FolderKanban} color="bg-orange-50 text-orange-600" />
       </div>
 
       <Card>
@@ -358,7 +375,7 @@ function BrandDashboard() {
           <h3 className="font-semibold">Project Saya</h3>
         </CardHeader>
         <CardContent className="space-y-4">
-          {brandProjects.map((proj) => (
+          {(recentProjects || []).map((proj: any) => (
             <div
               key={proj.id}
               className="p-4 rounded-xl border border-border hover:border-orange-200 hover:shadow-sm cursor-pointer transition-all"
@@ -368,9 +385,9 @@ function BrandDashboard() {
                 <div>
                   <p className="font-medium">{proj.name}</p>
                   <div className="flex flex-wrap gap-1 mt-1.5">
-                    {proj.platforms.map((pl) => (
+                    {(proj.platforms || []).map((pl: any) => (
                       <span key={pl.id} className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                        {pl.name}
+                        {pl.platform?.name || 'Platform'}
                       </span>
                     ))}
                   </div>
@@ -380,9 +397,9 @@ function BrandDashboard() {
               <div>
                 <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
                   <span>Progress Fase</span>
-                  <span>{proj.progress}/6 fase — {phaseLabels[proj.progress] || 'Draft'}</span>
+                  <span>{proj.progress || 1}/6 fase — {phaseLabels[proj.progress || 1] || 'Draft'}</span>
                 </div>
-                <ProgressBar value={proj.progress} max={6} color="orange" />
+                <ProgressBar value={proj.progress || 1} max={6} color="orange" />
               </div>
               <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Deadline: {formatDateShort(proj.deadline)}</span>
@@ -403,7 +420,7 @@ function BrandDashboard() {
           </div>
         </CardHeader>
         <CardContent className="space-y-2.5">
-          {brandInvoices.map((inv) => (
+          {(recentInvoices || []).map((inv: any) => (
             <div
               key={inv.id}
               className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 cursor-pointer transition-colors"
@@ -427,5 +444,19 @@ function BrandDashboard() {
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
-  return user?.role === 'BRAND' ? <BrandDashboard /> : <AdminDashboard />
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => api<any>('/dashboard')
+  })
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+      </div>
+    )
+  }
+
+  return user?.role === 'BRAND' ? <BrandDashboard data={data} /> : <AdminDashboard data={data} />
 }

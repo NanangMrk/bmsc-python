@@ -78,6 +78,7 @@ export function ScriptTab({ project }: ScriptTabProps) {
   const hasAddRow = hasPermission('proj_script_add_row')
   const hasDelRow = hasPermission('proj_script_del_row')
   const hasComment = hasPermission('proj_script_comment')
+  const hasDocPrint = hasPermission('proj_doc_print')
 
   const [activePlatform, setActivePlatform] = useState(project.platforms[0]?.id ?? '')
   const [platformSegments, setPlatformSegments] = useState<Record<string, ScriptSegment[]>>(() => {
@@ -164,6 +165,32 @@ export function ScriptTab({ project }: ScriptTabProps) {
   }, [(project as any).scripts])
   const segments = platformSegments[activePlatform] || []
   const [isDirty, setIsDirty] = useState(false)
+
+  // Auto-resize textareas to fit content
+  const handleInputResize = useCallback((e: React.FormEvent<HTMLTextAreaElement>) => {
+    setIsDirty(true)
+    const el = e.currentTarget
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [])
+
+  useEffect(() => {
+    const resizeTextareas = () => {
+      Object.values(audioRefs.current).forEach(el => {
+        if (el) {
+          el.style.height = 'auto'
+          el.style.height = `${el.scrollHeight}px`
+        }
+      })
+      Object.values(visualRefs.current).forEach(el => {
+        if (el) {
+          el.style.height = 'auto'
+          el.style.height = `${el.scrollHeight}px`
+        }
+      })
+    }
+    setTimeout(resizeTextareas, 0)
+  }, [segments])
 
   // Initialize imageUrls from DB data
   const [imageUrls, setImageUrls] = useState<Record<string, string>>(() => {
@@ -548,10 +575,11 @@ export function ScriptTab({ project }: ScriptTabProps) {
                     <div className="w-[34%] pr-6">
                       <textarea
                         ref={(el) => { audioRefs.current[row.id] = el }}
-                        className="w-full min-h-[80px] text-sm font-medium text-foreground bg-transparent resize-none focus:outline-none placeholder:text-muted-foreground/40 leading-relaxed border-b border-transparent focus:border-orange-200 transition-colors"
+                        className="w-full min-h-[80px] text-sm font-medium text-foreground bg-transparent resize-none focus:outline-none placeholder:text-muted-foreground/40 leading-relaxed border-b border-transparent focus:border-orange-200 transition-colors overflow-hidden"
                         defaultValue={row.audio}
                         placeholder="Tulis naskah audio / VO di sini..."
-                        onInput={() => setIsDirty(true)}
+                        onInput={handleInputResize}
+                        readOnly={!hasAddRow}
                       />
                     </div>
 
@@ -559,10 +587,11 @@ export function ScriptTab({ project }: ScriptTabProps) {
                     <div className="w-[34%] pr-6">
                       <textarea
                         ref={(el) => { visualRefs.current[row.id] = el }}
-                        className="w-full min-h-[80px] text-sm font-medium text-foreground bg-transparent resize-none focus:outline-none placeholder:text-muted-foreground/40 leading-relaxed border-b border-transparent focus:border-orange-200 transition-colors"
+                        className="w-full min-h-[80px] text-sm font-medium text-foreground bg-transparent resize-none focus:outline-none placeholder:text-muted-foreground/40 leading-relaxed border-b border-transparent focus:border-orange-200 transition-colors overflow-hidden"
                         defaultValue={row.visual}
                         placeholder="Deskripsi visual / shot..."
-                        onInput={() => setIsDirty(true)}
+                        onInput={handleInputResize}
+                        readOnly={!hasAddRow}
                       />
                     </div>
 
@@ -606,6 +635,7 @@ export function ScriptTab({ project }: ScriptTabProps) {
                         className="w-full text-sm font-bold text-right font-mono tracking-widest bg-transparent focus:outline-none mb-1 border-b border-transparent focus:border-orange-200 transition-colors placeholder:text-muted-foreground/30"
                         title="Durasi (MM:SS)"
                         onInput={() => setIsDirty(true)}
+                        readOnly={!hasAddRow}
                       />
                       <div className="text-[9px] text-muted-foreground font-semibold uppercase mb-3">MM:SS</div>
                       <button
@@ -671,6 +701,7 @@ export function ScriptTab({ project }: ScriptTabProps) {
           </button>
           )}
           {/* Simpan button */}
+          {hasAddSeg && (
           <button
             onClick={handleSave}
             className={cn(
@@ -682,13 +713,16 @@ export function ScriptTab({ project }: ScriptTabProps) {
           >
             <Save className="h-4 w-4" /> Simpan Skrip
           </button>
+          )}
         </div>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-border text-foreground rounded-full text-sm font-bold hover:bg-muted transition-colors shadow-sm"
-        >
-          <Printer className="h-4 w-4" /> Cetak Halaman
-        </button>
+        {hasDocPrint && (
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-border text-foreground rounded-full text-sm font-bold hover:bg-muted transition-colors shadow-sm"
+          >
+            <Printer className="h-4 w-4" /> Cetak Halaman
+          </button>
+        )}
       </div>
 
       {/* Image Preview Modal */}

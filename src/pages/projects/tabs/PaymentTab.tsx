@@ -18,6 +18,7 @@ export function PaymentTab({ project }: PaymentTabProps) {
   const hasPayAdd = hasPermission('proj_pay_add')
   const hasPayDel = hasPermission('proj_pay_delete')
   const hasPayPrint = hasPermission('proj_pay_print')
+  const hasPayEditStatus = hasPermission('proj_pay_edit_status')
 
   // Load payments dynamically from API project data
   const [payments, setPayments] = useState<any[]>((project as any).payments || [])
@@ -315,22 +316,25 @@ export function PaymentTab({ project }: PaymentTabProps) {
                     <span className="font-bold text-muted-foreground tracking-wider uppercase">UBAH STATUS:</span>
                     <div className="flex items-center bg-gray-100 rounded p-0.5 font-bold">
                       <button
+                        disabled={!hasPayEditStatus}
                         onClick={() => handleSelectStatus(pay.id, 'MENUNGGU')}
-                        className={cn("px-2 py-0.5 rounded transition-all", displayStatus === 'MENUNGGU' ? "bg-amber-500 text-white shadow-sm" : "text-muted-foreground hover:bg-white")}
+                        className={cn("px-2 py-0.5 rounded transition-all", displayStatus === 'MENUNGGU' ? "bg-amber-500 text-white shadow-sm" : "text-muted-foreground hover:bg-white", !hasPayEditStatus && "cursor-not-allowed")}
                         type="button"
                       >
                         MENUNGGU
                       </button>
                       <button
+                        disabled={!hasPayEditStatus}
                         onClick={() => handleSelectStatus(pay.id, 'PROSES_VERIFIKASI')}
-                        className={cn("px-2 py-0.5 rounded transition-all", displayStatus === 'PROSES_VERIFIKASI' ? "bg-blue-500 text-white shadow-sm" : "text-muted-foreground hover:bg-white")}
+                        className={cn("px-2 py-0.5 rounded transition-all", displayStatus === 'PROSES_VERIFIKASI' ? "bg-blue-500 text-white shadow-sm" : "text-muted-foreground hover:bg-white", !hasPayEditStatus && "cursor-not-allowed")}
                         type="button"
                       >
                         PROSES
                       </button>
                       <button
+                        disabled={!hasPayEditStatus}
                         onClick={() => handleSelectStatus(pay.id, 'LUNAS')}
-                        className={cn("px-2 py-0.5 rounded transition-all", displayStatus === 'LUNAS' ? "bg-green-500 text-white shadow-sm" : "text-muted-foreground hover:bg-white")}
+                        className={cn("px-2 py-0.5 rounded transition-all", displayStatus === 'LUNAS' ? "bg-green-500 text-white shadow-sm" : "text-muted-foreground hover:bg-white", !hasPayEditStatus && "cursor-not-allowed")}
                         type="button"
                       >
                         LUNAS
@@ -517,10 +521,11 @@ export function PaymentTab({ project }: PaymentTabProps) {
                   <div>
                     <h3 className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest mb-2.5">DITANGGUHKAN KEPADA (BILL TO)</h3>
                     <div className="text-xs space-y-0.5 leading-relaxed">
-                      <p className="font-bold text-foreground uppercase">{project.brand.name}</p>
-                      <p><span className="text-muted-foreground">Attn:</span> {project.brand.name}</p>
-                      <p className="text-muted-foreground">{project.brand.email || '—'}</p>
-                      <p className="text-muted-foreground">—</p>
+                      <p className="font-bold text-foreground uppercase">{printInvoicePayment.billTo?.companyName || printInvoicePayment.billTo?.brand?.name || printInvoicePayment.billTo?.name || project.brand?.name || 'Unknown'}</p>
+                      <p><span className="text-muted-foreground">Attn:</span> {printInvoicePayment.billTo?.picName || printInvoicePayment.billTo?.name || project.brand?.name || '-'}</p>
+                      <p className="text-muted-foreground whitespace-pre-wrap">{printInvoicePayment.billTo?.address || '-'}</p>
+                      <p className="text-muted-foreground">{printInvoicePayment.billTo?.phone || '-'}</p>
+                      <p className="text-muted-foreground">{printInvoicePayment.billTo?.email || '-'}</p>
                     </div>
                   </div>
 
@@ -695,10 +700,11 @@ export function PaymentTab({ project }: PaymentTabProps) {
             <div>
               <h3 className="text-[10px] font-extrabold text-stone-400 uppercase tracking-widest mb-2.5">DITANGGUHKAN KEPADA (BILL TO)</h3>
               <div className="text-xs space-y-0.5 leading-relaxed">
-                <p className="font-bold text-stone-900 uppercase">{project.brand.name}</p>
-                <p><span className="text-stone-400">Attn:</span> {project.brand.name}</p>
-                <p className="text-stone-500">{project.brand.email || '—'}</p>
-                <p className="text-stone-500">—</p>
+                <p className="font-bold text-stone-900 uppercase">{printInvoicePayment.billTo?.companyName || printInvoicePayment.billTo?.brand?.name || printInvoicePayment.billTo?.name || project.brand?.name || 'Unknown'}</p>
+                <p><span className="text-stone-400">Attn:</span> {printInvoicePayment.billTo?.picName || printInvoicePayment.billTo?.name || project.brand?.name || '-'}</p>
+                <p className="text-stone-500 whitespace-pre-wrap">{printInvoicePayment.billTo?.address || '-'}</p>
+                <p className="text-stone-500">{printInvoicePayment.billTo?.phone || '-'}</p>
+                <p className="text-stone-500">{printInvoicePayment.billTo?.email || '-'}</p>
               </div>
             </div>
 

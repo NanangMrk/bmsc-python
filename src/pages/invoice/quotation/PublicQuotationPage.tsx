@@ -94,8 +94,9 @@ export default function PublicQuotationPage() {
             
             <div className="text-left sm:text-right">
               <h2 className="text-xl font-black text-stone-900 tracking-tight mb-1 whitespace-pre-line">{settings.corporateName?.replace(' ', '\n') || 'PT. Bintang Media\nSolusi Creativ'}</h2>
-              <p className="text-xs text-muted-foreground font-medium leading-relaxed whitespace-pre-line">
-                {settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}
+              <p className="text-xs text-muted-foreground font-medium leading-relaxed">
+                {settings.building && <>{settings.building}<br/></>}
+                <span className="whitespace-pre-line">{settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}</span>
                 <br />
                 {settings.email || 'finance@bmsc.id'} | {settings.phone || '+62 811 1234 567'}
               </p>

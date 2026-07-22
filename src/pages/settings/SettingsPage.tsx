@@ -21,18 +21,21 @@ import {
   Circle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { usePermissions } from '@/hooks/usePermissions'
 
 export default function SettingsPage() {
+  const { hasPermission, canEdit } = usePermissions()
+  const hasSysManageSettings = hasPermission('sys_manage_settings') || canEdit
   const [activeTab, setActiveTab] = useState('identitas')
 
   const [formData, setFormData] = useState({
-    agencyName: 'NanangMrk',
-    corporateName: 'NanangMrk Channel',
-    tagline: 'NETWORK CONTENT CREATOR',
-    email: 'nanangmrkchannel@gmail.com',
-    phone: '085156014905',
-    building: 'Jl. Pangeran Syarief',
-    address: 'RT 03 RW 01 Saripan Jepara\n59414'
+    agencyName: '',
+    corporateName: '',
+    tagline: '',
+    email: '',
+    phone: '',
+    building: '',
+    address: ''
   })
 
   const [quoSettings, setQuoSettings] = useState({
@@ -220,12 +223,14 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
+        {hasSysManageSettings && (
         <button
           onClick={handleSaveAllSettings}
           className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
         >
           Simpan Pengaturan
         </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -348,11 +353,16 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {hasSysManageSettings && (
             <div className="flex justify-end pt-4">
-              <button className="bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold px-6 py-2.5 rounded-lg shadow-sm transition-colors">
+              <button 
+                onClick={handleSaveAllSettings}
+                className="bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold px-6 py-2.5 rounded-lg shadow-sm transition-colors"
+              >
                 Simpan Profil Kantor
               </button>
             </div>
+            )}
           </div>
         </div>
 
@@ -418,6 +428,7 @@ export default function SettingsPage() {
       {activeTab === 'rekening' && (
         <div className="flex flex-col xl:flex-row gap-6">
           {/* Form Input */}
+          {hasSysManageSettings && (
           <div className="flex-1 bg-white border border-border/60 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/40">
               <div className="flex items-center gap-2 text-xs font-bold text-orange-600 uppercase tracking-widest">
@@ -454,9 +465,10 @@ export default function SettingsPage() {
               </div>
             </form>
           </div>
+          )}
 
           {/* List Rekening */}
-          <div className="w-full xl:w-[500px] space-y-4">
+          <div className={`w-full ${hasSysManageSettings ? 'xl:w-[500px]' : ''} space-y-4`}>
             <div className="flex items-center gap-2 mb-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
               <CreditCard className="h-4 w-4 text-orange-500" />
               DAFTAR REKENING AKTIF ({bankAccounts.length})
@@ -479,6 +491,7 @@ export default function SettingsPage() {
                       <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-1">{bank.bankName}</p>
                     </div>
                   </div>
+                  {hasSysManageSettings && (
                   <div className="flex items-center gap-1">
                     <button 
                       onClick={() => handleToggleBankActive(bank)}
@@ -507,6 +520,7 @@ export default function SettingsPage() {
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+                  )}
                 </div>
               ))
             )}
@@ -660,6 +674,7 @@ export default function SettingsPage() {
                 <p className="text-[10px] text-muted-foreground mt-1.5">Teks ini akan otomatis disematkan di bagian bawah dokumen Quotation.</p>
               </div>
 
+              {hasSysManageSettings && (
               <div className="flex justify-end pt-4 border-t border-border/40">
                 <button 
                   onClick={handleSaveAllSettings}
@@ -668,6 +683,7 @@ export default function SettingsPage() {
                   Simpan Format Quotation
                 </button>
               </div>
+              )}
             </div>
           </div>
           
@@ -967,6 +983,7 @@ export default function SettingsPage() {
                 <p className="text-[10px] text-muted-foreground mt-1.5">Teks ini akan tampil sebagai petunjuk pembayaran di bagian bawah Invoice.</p>
               </div>
 
+              {hasSysManageSettings && (
               <div className="flex justify-end pt-4 border-t border-border/40">
                 <button 
                   onClick={handleSaveAllSettings}
@@ -975,6 +992,7 @@ export default function SettingsPage() {
                   Simpan Format Invoice
                 </button>
               </div>
+              )}
             </div>
           </div>
           

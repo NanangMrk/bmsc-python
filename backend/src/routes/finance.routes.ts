@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getQuotations, getQuotationById, createQuotation, updateQuotation, deleteQuotation, generateInvoice, getInvoices, createInvoice, updateInvoiceStatus, getInvoiceById } from '../controllers/finance.controller';
+import { getQuotations, getQuotationById, createQuotation, updateQuotation, deleteQuotation, generateInvoice, getInvoices, createInvoice, updateInvoiceStatus, getInvoiceById, getTransactions, createTransaction, deleteTransaction } from '../controllers/finance.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
 
 const router = Router();
@@ -24,5 +24,10 @@ router.get('/invoices', getInvoices);
 router.get('/invoices/:id', getInvoiceById);
 router.post('/invoices', createInvoice);
 router.patch('/invoices/:id/status', updateInvoiceStatus);
+
+// Finance Transactions
+router.get('/transactions', getTransactions);
+router.post('/transactions', createTransaction);
+router.delete('/transactions/:id', deleteTransaction);
 
 export default router;

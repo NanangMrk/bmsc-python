@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import {
   Plus,
   Wallet,
@@ -32,7 +34,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { formatCurrency, cn } from '@/lib/utils'
-import { mockInvoices } from '@/lib/mock-data'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface Transaction {
   id: string
@@ -42,64 +44,8 @@ interface Transaction {
   amount: number
   date: string
   status: 'SUCCESS' | 'PENDING'
+  isInvoice?: boolean
 }
-
-const INITIAL_EXPENSES_AND_OTHER_INCOME: Transaction[] = [
-  {
-    id: 't-2',
-    name: 'Sewa Domain & Server Hosting bmsc.id',
-    category: 'Server & Domain',
-    type: 'EXPENSE',
-    amount: 850000,
-    date: '2025-01-18',
-    status: 'SUCCESS'
-  },
-  {
-    id: 't-3',
-    name: 'Gaji Kontrak Editor Video (Nadia Rahman)',
-    category: 'Operasional/Gaji',
-    type: 'EXPENSE',
-    amount: 4500000,
-    date: '2025-01-28',
-    status: 'SUCCESS'
-  },
-  {
-    id: 't-6',
-    name: 'Pembelian Microphone Wireless DJI Mic 2',
-    category: 'Peralatan',
-    type: 'EXPENSE',
-    amount: 5200000,
-    date: '2025-02-20',
-    status: 'SUCCESS'
-  },
-  {
-    id: 't-7',
-    name: 'Transportasi Liputan Event TechVision',
-    category: 'Transportasi',
-    type: 'EXPENSE',
-    amount: 450000,
-    date: '2025-02-22',
-    status: 'SUCCESS'
-  },
-  {
-    id: 't-8',
-    name: 'AdSense YouTube Bulanan - Januari',
-    category: 'Platform Adsense',
-    type: 'INCOME',
-    amount: 8200000,
-    date: '2025-02-25',
-    status: 'SUCCESS'
-  },
-  {
-    id: 't-9',
-    name: 'Biaya Iklan Facebook Ads - Campaign Kopi',
-    category: 'Marketing',
-    type: 'EXPENSE',
-    amount: 2000000,
-    date: '2025-02-26',
-    status: 'SUCCESS'
-  }
-]
 
 const INCOME_CATEGORIES = ['Project', 'Platform Adsense', 'Afiliasi', 'Sponsor Video', 'Lainnya']
 const EXPENSE_CATEGORIES = ['Operasional/Gaji', 'Server & Domain', 'Peralatan', 'Transportasi', 'Marketing', 'Lainnya']
@@ -108,18 +54,45 @@ const COLORS = ['#f97316', '#3b82f6', '#10b981', '#a855f7', '#64748b', '#ec4899'
 const EXPENSE_COLORS = ['#f43f5e', '#ec4899', '#f472b6', '#fb7185', '#be123c', '#9f1239']
 
 export default function FinancePage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const mappedInvoices: Transaction[] = mockInvoices.map((inv) => ({
+  const { hasPermission } = usePermissions()
+  const hasAddIncome = hasPermission('fin_add_income')
+  const hasAddExpense = hasPermission('fin_add_expense')
+
+  const queryClient = useQueryClient()
+
+  const { data: invoicesData = [] } = useQuery({
+    queryKey: ['finance', 'invoices'],
+    queryFn: () => api<any[]>('/finance/invoices')
+  })
+
+  const { data: financeTransactionsData = [] } = useQuery({
+    queryKey: ['finance', 'transactions'],
+    queryFn: () => api<any[]>('/finance/transactions')
+  })
+
+  const transactions = useMemo(() => {
+    const mappedInvoices: Transaction[] = invoicesData.map((inv: any) => ({
       id: inv.id,
-      name: `Invoice ${inv.number} - ${inv.brand.name}`,
+      name: `Invoice ${inv.number} - ${inv.brand?.name || 'No Brand'}`,
       category: 'Project',
       type: 'INCOME',
-      amount: inv.total,
+      amount: Number(inv.total),
       date: inv.createdAt,
-      status: inv.status === 'LUNAS' ? 'SUCCESS' : 'PENDING'
+      status: inv.status === 'LUNAS' ? 'SUCCESS' : 'PENDING',
+      isInvoice: true
     }))
-    return [...mappedInvoices, ...INITIAL_EXPENSES_AND_OTHER_INCOME]
-  })
+    const mappedTransactions: Transaction[] = financeTransactionsData.map((tx: any) => ({
+      id: tx.id,
+      name: tx.name,
+      category: tx.category,
+      type: tx.type,
+      amount: Number(tx.amount),
+      date: tx.date,
+      status: tx.status,
+      isInvoice: false
+    }))
+    return [...mappedInvoices, ...mappedTransactions]
+  }, [invoicesData, financeTransactionsData])
   const [filterType, setFilterType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
@@ -281,6 +254,40 @@ export default function FinancePage() {
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [periodFilteredTransactions, filterType, searchQuery])
 
+  const createTransactionMutation = useMutation({
+    mutationFn: (newTx: any) => api('/finance/transactions', {
+      method: 'POST',
+      body: JSON.stringify(newTx),
+      headers: { 'Content-Type': 'application/json' }
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'transactions'] })
+      triggerNotification('Transaksi berhasil dicatat!')
+      setShowAddModal(false)
+      // Reset Form
+      setNewTxName('')
+      setNewTxAmount('')
+      setNewTxDate(new Date().toISOString().split('T')[0])
+      setNewTxStatus('SUCCESS')
+    },
+    onError: (error: any) => {
+      alert('Gagal menyimpan transaksi: ' + error.message)
+    }
+  })
+
+  const deleteTransactionMutation = useMutation({
+    mutationFn: (id: string) => api(`/finance/transactions/${id}`, {
+      method: 'DELETE'
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'transactions'] })
+      triggerNotification('Transaksi berhasil dihapus.')
+    },
+    onError: (error: any) => {
+      alert('Gagal menghapus transaksi: ' + error.message)
+    }
+  })
+
   const handleAddTransaction = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newTxName.trim() || !newTxAmount) {
@@ -309,32 +316,23 @@ export default function FinancePage() {
       setCustomCategoryName('')
     }
 
-    const newTx: Transaction = {
-      id: `t-${Date.now()}`,
+    createTransactionMutation.mutate({
       name: newTxName,
       type: newTxType,
       category: finalCategory,
       amount: parseInt(newTxAmount) || 0,
       date: newTxDate,
       status: newTxStatus
-    }
-
-    setTransactions((prev) => [newTx, ...prev])
-    setShowAddModal(false)
-
-    // Reset Form
-    setNewTxName('')
-    setNewTxAmount('')
-    setNewTxDate(new Date().toISOString().split('T')[0])
-    setNewTxStatus('SUCCESS')
-
-    triggerNotification('Transaksi berhasil dicatat!')
+    })
   }
 
-  const handleDeleteTransaction = (id: string) => {
+  const handleDeleteTransaction = (id: string, isInvoice?: boolean) => {
+    if (isInvoice) {
+      alert('Invoice tidak dapat dihapus dari halaman ini. Silakan hapus melalui menu Invoice.')
+      return
+    }
     if (confirm('Apakah Anda yakin ingin menghapus catatan transaksi ini?')) {
-      setTransactions((prev) => prev.filter((t) => t.id !== id))
-      triggerNotification('Transaksi berhasil dihapus.')
+      deleteTransactionMutation.mutate(id)
     }
   }
 
@@ -467,13 +465,19 @@ export default function FinancePage() {
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Ekspor CSV
           </Button>
+          {(hasAddIncome || hasAddExpense) && (
           <Button 
-            onClick={() => setShowAddModal(true)} 
+            onClick={() => {
+              setNewTxType(hasAddIncome ? 'INCOME' : 'EXPENSE')
+              setNewTxCategory(hasAddIncome ? incomeCategories[0] : expenseCategories[0])
+              setShowAddModal(true)
+            }} 
             className="bg-orange-500 hover:bg-orange-650 text-white flex items-center gap-1.5"
             size="sm"
           >
             <Plus className="h-4 w-4" /> Catat Transaksi
           </Button>
+          )}
         </div>
       </div>
 
@@ -828,9 +832,14 @@ export default function FinancePage() {
                       </td>
                       <td className="px-5 py-4 text-center whitespace-nowrap">
                         <button
-                          onClick={() => handleDeleteTransaction(tx.id)}
-                          className="h-8 w-8 text-stone-400 hover:text-red-500 hover:bg-red-50/50 rounded-lg flex items-center justify-center mx-auto transition-colors"
-                          title="Hapus"
+                          onClick={() => handleDeleteTransaction(tx.id, tx.isInvoice)}
+                          className={`h-8 w-8 rounded-lg flex items-center justify-center mx-auto transition-colors ${
+                            tx.isInvoice 
+                              ? 'text-stone-300 cursor-not-allowed'
+                              : 'text-stone-400 hover:text-red-500 hover:bg-red-50/50'
+                          }`}
+                          title={tx.isInvoice ? "Invoice tidak bisa dihapus di sini" : "Hapus"}
+                          disabled={tx.isInvoice}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -1075,6 +1084,7 @@ export default function FinancePage() {
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Tipe Transaksi</label>
                 <div className="flex bg-stone-100 rounded-xl p-0.5 border border-stone-200">
+                  {hasAddIncome && (
                   <button
                     type="button"
                     onClick={() => handleTypeChange('INCOME')}
@@ -1086,6 +1096,8 @@ export default function FinancePage() {
                   >
                     Pemasukan (Kas Masuk)
                   </button>
+                  )}
+                  {hasAddExpense && (
                   <button
                     type="button"
                     onClick={() => handleTypeChange('EXPENSE')}
@@ -1097,6 +1109,7 @@ export default function FinancePage() {
                   >
                     Pengeluaran (Kas Keluar)
                   </button>
+                  )}
                 </div>
               </div>
 

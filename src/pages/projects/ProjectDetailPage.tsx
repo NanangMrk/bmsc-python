@@ -72,7 +72,8 @@ export default function ProjectDetailPage() {
     conceptPages: rawProject.conceptPages || [],
     scripts: rawProject.scripts || [],
     productionTasks: rawProject.productionTasks || [],
-    uploads: rawProject.uploads || []
+    uploads: rawProject.uploads || [],
+    chatMessages: rawProject.chatMessages || []
   } : null;
 
   // Track phase completion statuses dynamically
@@ -234,7 +235,7 @@ export default function ProjectDetailPage() {
             </div>
           )}
           
-          {canEdit && (
+          {hasPermission('proj_delete') && (
             <button
               onClick={handleDeleteProject}
               className="ml-2 h-9 w-9 flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
