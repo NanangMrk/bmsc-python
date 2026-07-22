@@ -70,6 +70,37 @@ export const deletePaymentTermin = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getPaymentTerminById = async (req: Request, res: Response) => {
+  try {
+    const terminId = req.params.terminId as string;
+    
+    const payment = await prisma.paymentTermin.findUnique({
+      where: { id: terminId },
+      include: {
+        project: {
+          include: {
+            brand: true
+          }
+        },
+        billTo: {
+          include: {
+            brand: true
+          }
+        }
+      }
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: 'Payment not found' });
+    }
+
+    return res.json(payment);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 // --- CONCEPT PHASE ---
 export const saveConceptPage = async (req: AuthRequest, res: Response) => {
   try {

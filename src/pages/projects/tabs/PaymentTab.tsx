@@ -30,6 +30,12 @@ export function PaymentTab({ project }: PaymentTabProps) {
   })
   const activeBank = bankAccounts.find((b: any) => b.isActive) || bankAccounts[0]
 
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => api<any>('/settings')
+  })
+  const settings = settingsData || {}
+
   useEffect(() => {
     if ((project as any).payments) {
       setPayments((project as any).payments);
@@ -426,7 +432,7 @@ export function PaymentTab({ project }: PaymentTabProps) {
                   size="sm"
                   className="text-xs font-semibold px-4 py-2 border border-stone-250 hover:bg-stone-50 transition-all bg-white"
                   onClick={() => {
-                    const url = `${window.location.origin}/public/invoice/${printInvoicePayment.id}`;
+                    const url = `${window.location.origin}/public/payment/${printInvoicePayment.id}`;
                     navigator.clipboard.writeText(url);
                     alert('Link invoice publik berhasil disalin!');
                   }}
@@ -491,16 +497,16 @@ export function PaymentTab({ project }: PaymentTabProps) {
                   <div>
                     <div className="flex items-center gap-3 mb-3">
                       <div className="h-9 w-9 bg-orange-600 text-white rounded-full flex items-center justify-center font-black text-base shadow-sm">
-                        N
+                        {settings.agencyName?.charAt(0) || 'N'}
                       </div>
-                      <span className="font-extrabold text-base text-foreground">NanangMrk</span>
+                      <span className="font-extrabold text-base text-foreground">{settings.agencyName || 'NanangMrk'}</span>
                     </div>
                     <div className="text-xs text-muted-foreground space-y-0.5 leading-relaxed">
-                      <p className="font-bold text-foreground text-xs">NanangMrk Channel</p>
-                      <p>Jl. Pangeran Syarief</p>
-                      <p>RT 03 RW 01 Saripan Jepara 59414</p>
-                      <p>Email: nanangmrkchannel@gmail.com</p>
-                      <p>Telp: 085156014905</p>
+                      {settings.corporateName && <p className="font-bold text-foreground text-xs">{settings.corporateName}</p>}
+                      {settings.building && <p>{settings.building}</p>}
+                      <p className="whitespace-pre-line">{settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}</p>
+                      <p>Email: {settings.email || 'finance@bmsc.id'}</p>
+                      <p>Telp: {settings.phone || '+62 811 1234 567'}</p>
                     </div>
                   </div>
 
@@ -589,17 +595,26 @@ export function PaymentTab({ project }: PaymentTabProps) {
                   {/* Payment Instructions */}
                   <div className="space-y-1.5">
                     <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px]">TATA CARA PEMBAYARAN</h4>
-                    <p className="text-muted-foreground font-medium">
-                      Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905
+                    <p className="text-muted-foreground font-medium whitespace-pre-line">
+                      {settings.invBankInstruction || 'Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905'}
                     </p>
                   </div>
 
                   {/* Target Bank Account */}
                   <div className="md:border-l border-gray-200 md:pl-5 space-y-0.5">
                     <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px] mb-1.5">REKENING TUJUAN</h4>
-                    <p className="font-extrabold text-foreground">DIGIBANK by DBS</p>
-                    <p className="font-black text-orange-600 text-base tracking-wider">1702945239</p>
-                    <p className="text-muted-foreground font-semibold">a.n. Muhammad Nanang Rizaldi</p>
+                    {activeBank ? (
+                      <>
+                        <p className="font-extrabold text-foreground">{activeBank.bankName}</p>
+                        <p className="font-black text-orange-600 text-base tracking-wider">{activeBank.accountNumber}</p>
+                        <p className="text-muted-foreground font-semibold">a.n. {activeBank.accountName}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-extrabold text-foreground">Belum ada Rekening Aktif</p>
+                        <p className="text-muted-foreground font-semibold text-[10px] mt-1">Silakan tambahkan di menu Pengaturan.</p>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -608,10 +623,9 @@ export function PaymentTab({ project }: PaymentTabProps) {
                   {/* Terms and Conditions */}
                   <div className="space-y-1.5">
                     <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px]">SYARAT & KETENTUAN</h4>
-                    <ol className="list-decimal pl-4 text-muted-foreground space-y-0.5 font-medium leading-relaxed">
-                      <li>Invoice ini adalah sah diterbitkan oleh perusahaan.</li>
-                      <li>Tagihan ini berlaku sebagai kwitansi lunas yang sah apabila status tercantum LUNAS / PAID.</li>
-                    </ol>
+                    <div className="text-[10.5px] text-muted-foreground/80 leading-relaxed font-medium whitespace-pre-line">
+                      {settings.invTermsText || '1. Invoice ini adalah sah diterbitkan oleh perusahaan.\n2. Tagihan ini berlaku sebagai kwitansi lunas yang sah apabila status tercantum LUNAS / PAID.'}
+                    </div>
                   </div>
 
                   {/* Signature */}
@@ -619,8 +633,8 @@ export function PaymentTab({ project }: PaymentTabProps) {
                     <div className="flex flex-col items-center text-center space-y-12 w-48">
                       <h4 className="font-extrabold text-muted-foreground uppercase tracking-widest text-[9px]">HORMAT KAMI,</h4>
                       <div className="space-y-1 w-full">
-                        <p className="border-b border-dotted border-gray-400 pb-1.5 font-bold text-foreground w-full text-center">NanangMrk</p>
-                        <p className="text-muted-foreground text-[9px] font-semibold uppercase tracking-widest text-center w-full">NanangMrk Channel</p>
+                        <p className="border-b border-dotted border-gray-400 pb-1.5 font-bold text-foreground w-full text-center">{settings.invSignatoryName || 'NanangMrk'}</p>
+                        <p className="text-muted-foreground text-[9px] font-semibold uppercase tracking-widest text-center w-full">{settings.invSignatoryRole || 'Finance Manager'}</p>
                       </div>
                     </div>
                   </div>
@@ -670,16 +684,16 @@ export function PaymentTab({ project }: PaymentTabProps) {
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <div className="h-9 w-9 bg-orange-600 text-white rounded-full flex items-center justify-center font-black text-base shadow-sm">
-                  N
+                  {settings.agencyName?.charAt(0) || 'N'}
                 </div>
-                <span className="font-extrabold text-base text-stone-900">NanangMrk</span>
+                <span className="font-extrabold text-base text-stone-900">{settings.agencyName || 'NanangMrk'}</span>
               </div>
               <div className="text-xs text-stone-500 space-y-0.5 leading-relaxed">
-                <p className="font-bold text-stone-900 text-xs">NanangMrk Channel</p>
-                <p>Jl. Pangeran Syarief</p>
-                <p>RT 03 RW 01 Saripan Jepara 59414</p>
-                <p>Email: nanangmrkchannel@gmail.com</p>
-                <p>Telp: 085156014905</p>
+                {settings.corporateName && <p className="font-bold text-stone-900 text-xs">{settings.corporateName}</p>}
+                {settings.building && <p>{settings.building}</p>}
+                <p className="whitespace-pre-line">{settings.address || 'Pondok Indah Office Tower 3\nJakarta Selatan, 12310'}</p>
+                <p>Email: {settings.email || 'finance@bmsc.id'}</p>
+                <p>Telp: {settings.phone || '+62 811 1234 567'}</p>
               </div>
             </div>
 
@@ -768,17 +782,26 @@ export function PaymentTab({ project }: PaymentTabProps) {
             {/* Payment Instructions */}
             <div className="space-y-1.5">
               <h4 className="font-extrabold text-stone-400 uppercase tracking-widest text-[9px]">TATA CARA PEMBAYARAN</h4>
-              <p className="text-stone-500 font-medium">
-                Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905
+              <p className="text-stone-500 font-medium whitespace-pre-line">
+                {settings.invBankInstruction || 'Mohon sertakan berita transfer nomor invoice saat melakukan pembayaran. Kirimkan konfirmasi bukti transfer melalui platform atau kirim ke WhatsApp 085156014905'}
               </p>
             </div>
 
             {/* Target Bank Account */}
             <div className="border-l border-stone-200 pl-5 space-y-0.5">
               <h4 className="font-extrabold text-stone-400 uppercase tracking-widest text-[9px] mb-1.5">REKENING TUJUAN</h4>
-              <p className="font-extrabold text-stone-900">DIGIBANK by DBS</p>
-              <p className="font-black text-orange-600 text-base tracking-wider">1702945239</p>
-              <p className="text-stone-500 font-semibold">a.n. Muhammad Nanang Rizaldi</p>
+              {activeBank ? (
+                <>
+                  <p className="font-extrabold text-stone-900">{activeBank.bankName}</p>
+                  <p className="font-black text-orange-600 text-base tracking-wider">{activeBank.accountNumber}</p>
+                  <p className="text-stone-500 font-semibold">a.n. {activeBank.accountName}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-extrabold text-stone-900">Belum ada Rekening Aktif</p>
+                  <p className="text-stone-500 font-semibold text-[10px] mt-1">Silakan tambahkan di menu Pengaturan.</p>
+                </>
+              )}
             </div>
           </div>
 
@@ -787,10 +810,9 @@ export function PaymentTab({ project }: PaymentTabProps) {
             {/* Terms and Conditions */}
             <div className="space-y-1.5">
               <h4 className="font-extrabold text-stone-400 uppercase tracking-widest text-[9px]">SYARAT & KETENTUAN</h4>
-              <ol className="list-decimal pl-4 text-stone-500 space-y-0.5 font-medium leading-relaxed">
-                <li>Invoice ini adalah sah diterbitkan oleh perusahaan.</li>
-                <li>Tagihan ini berlaku sebagai kwitansi lunas yang sah apabila status tercantum LUNAS / PAID.</li>
-              </ol>
+              <div className="text-[10.5px] text-stone-500 leading-relaxed font-medium whitespace-pre-line">
+                {settings.invTermsText || '1. Invoice ini adalah sah diterbitkan oleh perusahaan.\n2. Tagihan ini berlaku sebagai kwitansi lunas yang sah apabila status tercantum LUNAS / PAID.'}
+              </div>
             </div>
 
             {/* Signature */}
@@ -798,8 +820,8 @@ export function PaymentTab({ project }: PaymentTabProps) {
               <div className="flex flex-col items-center text-center space-y-12 w-48">
                 <h4 className="font-extrabold text-stone-400 uppercase tracking-widest text-[9px]">HORMAT KAMI,</h4>
                 <div className="space-y-1 w-full">
-                  <p className="border-b border-dotted border-stone-400 pb-1.5 font-bold text-stone-900 w-full text-center">NanangMrk</p>
-                  <p className="text-stone-500 text-[9px] font-semibold uppercase tracking-widest text-center w-full font-sans">NanangMrk Channel</p>
+                  <p className="border-b border-dotted border-stone-400 pb-1.5 font-bold text-stone-900 w-full text-center">{settings.invSignatoryName || 'NanangMrk'}</p>
+                  <p className="text-stone-500 text-[9px] font-semibold uppercase tracking-widest text-center w-full font-sans">{settings.invSignatoryRole || 'Finance Manager'}</p>
                 </div>
               </div>
             </div>

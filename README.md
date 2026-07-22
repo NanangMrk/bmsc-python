@@ -1,146 +1,330 @@
-# BMSC - Agency Management System
+README.md
+# Brand App Deployment Guide
 
-BMSC (Brand Management System Creativ) adalah aplikasi platform manajemen *agency* terintegrasi yang dirancang khusus untuk kreator konten dan *creative agency*. Sistem ini memusatkan seluruh kebutuhan operasional bisnis mulai dari manajemen proyek, kolaborasi naskah (*script*), pembuatan Quotation & Invoice yang kustomabel, hingga komunikasi langsung (*real-time chat*) dengan klien di dalam satu platform.
+Dokumentasi instalasi dan deployment Brand App.
 
-## 🚀 Fitur Utama
+Stack:
 
-- **Manajemen Proyek Lengkap:** Melacak fase pengerjaan proyek dari *drafting*, revisi, hingga *approval* final.
-- **Quotation & Invoice Otomatis:** Pembuatan tagihan (Invoice) dan penawaran harga (Quotation) secara dinamis yang bisa diakses oleh klien (publik). Format, identitas *agency*, logo, dan rincian bank dapat dikustomisasi penuh.
-- **Kolaborasi Naskah (Script):** Fasilitas untuk menulis dan mengomentari naskah antar tim internal dan eksternal (Brand/Klien).
-- **Real-Time Chat:** Komunikasi yang terpusat di setiap proyek menggunakan teknologi WebSockets (Socket.io).
-- **Sistem Role & Akses (RBAC):** Role-based access control yang dinamis. *Super Administrator*, *Admin*, dan *Klien* memiliki batasan aksi masing-masing (mulai dari hak melihat, mengedit, hingga hak untuk mencetak dokumen).
-- **Pengaturan & Identitas Agensi:** Kustomisasi profil lengkap perusahaan, alamat, kontak, dan logo yang akan dicetak secara dinamis ke dokumen-dokumen resmi penagihan.
-
----
-
-## 🛠️ Tech Stack & Kebutuhan (Requirements)
-
-Proyek ini dipisah menjadi dua bagian utama: **Frontend** dan **Backend**. Keduanya dikembangkan dengan arsitektur monorepo sederhana.
-
-**Kebutuhan Sistem Minimum:**
-- **Node.js**: v18.x atau lebih baru (Disarankan v20 LTS).
-- **MySQL**: v8.0 atau lebih baru.
-- **NPM** atau **Yarn**.
-
-### Frontend
-- **Framework:** React 19 + TypeScript + Vite.
-- **Styling:** Tailwind CSS + Radix UI + class-variance-authority.
-- **State Management & Fetching:** Zustand & TanStack React Query.
-- **Routing:** React Router DOM v7.
-- **Icons & Charts:** Lucide React & Recharts.
-
-### Backend
-- **Framework:** Express + TypeScript.
-- **Database ORM:** Prisma ORM.
-- **Real-time Engine:** Socket.IO.
-- **Authentication:** JSON Web Tokens (JWT) & bcrypt.
-- **File Upload:** Multer.
+- Frontend: React + Vite
+- Backend: Node.js + Express + TypeScript
+- Database: MySQL
+- ORM: Prisma
 
 ---
 
-## ⚙️ Panduan Instalasi (Installation)
+# 1. Struktur Folder
 
-### 1. Persiapan Database
-Buat sebuah database kosong di MySQL Anda. Contoh nama databasenya: `bmsc_db`.
 
-### 2. Setup Backend
-Masuk ke folder backend dan install dependensinya:
+/var/www/html
+├── Frontend React
+│
+└── backend
+├── Express API
+├── Prisma
+└── MySQL Connection
+
+
+---
+
+# 2. Backend Setup
+
+Masuk backend:
+
 ```bash
-cd backend
+cd /var/www/html/backend
+
+Install dependency:
+
 npm install
-```
 
-Buat file `.env` di dalam folder `backend/` dan sesuaikan koneksi databasenya (berikut adalah contoh):
-```env
-# URL koneksi MySQL Prisma
-DATABASE_URL="mysql://root:password@localhost:3306/bmsc_db"
+Install TypeScript runtime:
 
-# Kunci rahasia untuk Token Authentication (Ubah dengan string acak)
-JWT_SECRET="rahasia-bmsc-super-aman"
+npm install -D typescript tsx
+3. Konfigurasi Database
 
-# Port server backend (default)
-PORT=3000
-```
+Edit environment:
 
-Selanjutnya, migrasi database dan buat tabel-tabelnya (serta men-seed role dan super admin awal):
-```bash
+nano .env
+
+Contoh:
+
+DATABASE_URL="mysql://nanangmrk:nanangmrk@localhost:3306/bmsc_db"
+JWT_SECRET="secret-key"
+4. Setup Prisma Database
+
+Generate Prisma Client:
+
 npx prisma generate
+
+Buat tabel database:
+
 npx prisma db push
-npm run prisma:seed   # (Jika Anda memiliki file seed)
-```
+5. Seed Database
 
-Untuk menjalankan server backend (Mode Development):
-```bash
-npm run dev
-```
-Backend akan berjalan di `http://localhost:3000`.
+Edit package.json:
 
-### 3. Setup Frontend
-Buka terminal baru, masuk ke folder root proyek (frontend) dan install dependensi:
-```bash
+"prisma": {
+  "seed": "tsx prisma/seed.ts"
+}
+
+Jalankan:
+
+npx prisma db seed
+
+Default login:
+
+Email:
+admin@email.com
+
+Password:
+password123
+6. Build Backend
+
+Build:
+
+npm run build
+
+Cek hasil:
+
+ls -la dist
+
+Output:
+
+dist/
+├── server.js
+├── controllers
+├── routes
+└── middleware
+7. Test Backend
+
+Jalankan:
+
+npm start
+
+Output:
+
+Server is running on http://0.0.0.0:3000
+
+Cek port:
+
+ss -tulpn | grep 3000
+8. Test Login API
+curl -X POST http://localhost:3000/api/auth/login \
+-H "Content-Type: application/json" \
+-d '{"email":"admin@email.com","password":"password123"}'
+
+Response:
+
+{
+ "message":"Login successful",
+ "token":"JWT_TOKEN"
+}
+9. Frontend Setup
+
+Masuk frontend:
+
+cd /var/www/html
+
+Install:
+
 npm install
-```
+10. Konfigurasi API Frontend
 
-Secara default, frontend akan menghubungi API backend di `http://localhost:3000/api`. (Anda bisa mengubahnya di `src/lib/api.ts` bila perlu).
+Edit:
 
-Jalankan server Vite untuk frontend:
-```bash
+nano .env
+
+Isi:
+
+VITE_BACKEND_URL=http://SERVER_IP:3000
+
+Contoh:
+
+VITE_BACKEND_URL=http://169.69.69.37:3000
+
+Restart:
+
 npm run dev
-```
-Frontend akan berjalan di `http://localhost:5173`.
+11. Menjalankan Manual
 
----
+Frontend:
 
-## 💡 Cara Penggunaan
+cd /var/www/html
+npm run dev
 
-1. **Login:** Buka browser dan arahkan ke `http://localhost:5173`. Gunakan akun *Super Administrator* atau Admin yang sudah terdaftar.
-2. **Setup Awal:** Masuk ke menu **Pengaturan (Settings)**. Lengkapi Identitas & Profil Agensi, unggah Logo HQ, dan atur rekening Bank agar fitur cetak tagihan (Invoice/Quotation) bisa mencantumkan informasi bisnis Anda dengan benar.
-3. **Manajemen Pengguna:** Masuk ke menu **Roles** dan **Users** untuk mengundang tim internal Anda atau akun perwakilan klien (Brand). Jangan lupa atur izin/hak akses (*permissions*) sesuai peran masing-masing.
-4. **Buat Proyek:** Melalui menu Dashboard atau **Projects**, buat proyek baru. Tetapkan Klien/Brand yang akan ditagihkan dan undang PIC dari klien untuk bisa masuk dan ikut memberikan ulasan atau *chat* bersama tim Anda.
+Backend:
 
-## 🔒 Keamanan
-Sistem ini menggunakan JWT berlapis dan pengecekan otorisasi berbasis _roles/permissions_ pada setiap _endpoint_ mutasi (*create*, *update*, *delete*). Pastikan Anda menyimpan `JWT_SECRET` dengan aman pada lingkungan _production_.
+cd /var/www/html/backend
+npm run dev
+12. Auto Start Dengan Systemd
+Backend Service
 
----
+Buat file:
 
-## 🐧 Linux / Production Deployment
+nano /etc/systemd/system/brand-backend.service
 
-Untuk meng-deploy aplikasi ini di server Linux (VPS/Cloud) agar bisa diakses secara publik (bukan localhost):
+Isi:
 
-### 1. Konfigurasi Environment (`.env`)
-Pastikan Anda membuat file `.env` di dua tempat:
-**Di folder utama (Frontend):**
-```env
-VITE_API_URL=http://<IP_SERVER_ANDA>:3000/api
-VITE_BACKEND_URL=http://<IP_SERVER_ANDA>:3000
-```
-**Di folder `backend/`:**
-```env
-PORT=3000
-HOST=0.0.0.0
-DATABASE_URL="mysql://user:password@localhost:3306/bmsc_db"
-JWT_SECRET="rahasia-super-aman"
-```
+[Unit]
+Description=Brand App Backend
+After=network.target mysql.service
 
-### 2. Menjalankan Backend (menggunakan PM2)
-```bash
-cd backend
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/html/backend
+ExecStart=/usr/bin/npm run dev
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+Frontend Service
+
+Buat:
+
+nano /etc/systemd/system/brand-frontend.service
+
+Isi:
+
+[Unit]
+Description=Brand App Frontend
+After=network.target brand-backend.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/html
+ExecStart=/usr/bin/npm run dev
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+13. Aktifkan Service
+
+Reload:
+
+systemctl daemon-reload
+
+Enable startup:
+
+systemctl enable brand-backend
+systemctl enable brand-frontend
+
+Start:
+
+systemctl start brand-backend
+systemctl start brand-frontend
+14. Cek Status
+
+Backend:
+
+systemctl status brand-backend
+
+Frontend:
+
+systemctl status brand-frontend
+15. Melihat Log
+
+Backend:
+
+journalctl -u brand-backend -f
+
+Frontend:
+
+journalctl -u brand-frontend -f
+16. Restart Service
+
+Backend:
+
+systemctl restart brand-backend
+
+Frontend:
+
+systemctl restart brand-frontend
+17. Stop Service
+
+Backend:
+
+systemctl stop brand-backend
+
+Frontend:
+
+systemctl stop brand-frontend
+18. Troubleshooting
+Cek Port Backend
+ss -tulpn | grep 3000
+
+Output normal:
+
+LISTEN 0 511 0.0.0.0:3000
+Cek Node Process
+ps aux | grep node
+Rebuild Backend
+cd /var/www/html/backend
+
 npm install
+
 npx prisma generate
-npx prisma db push
-npm run build
-npm install -g pm2
-pm2 start dist/server.js --name bmsc-backend
-```
 
-### 3. Menjalankan Frontend (menggunakan PM2 & Serve)
-```bash
-# Kembali ke folder root proyek
-cd ..
+npm run build
+
+systemctl restart brand-backend
+Update Frontend
+cd /var/www/html
+
+git pull
+
 npm install
-npm run build
-npm install -g serve
-pm2 start "serve -s dist -p 5173" --name bmsc-frontend
-```
 
-Sekarang aplikasi BMSC Anda bisa diakses dari jaringan luar/publik melalui `http://<IP_SERVER_ANDA>:5173`.
+systemctl restart brand-frontend
+19. Production Recommendation
+
+Saat ini:
+
+Frontend
+npm run dev
+
+Backend
+npm run dev
+
+Untuk production:
+
+Backend:
+
+node dist/server.js
+
+Frontend:
+
+npm run build
+
+Gunakan:
+
+Nginx Reverse Proxy
+HTTPS
+Domain
+Cloudflare
+
+Arsitektur:
+
+User
+ |
+HTTPS
+ |
+Nginx
+ |
++-------------+
+|             |
+React       Node API
+             |
+            MySQL
+20. Default Admin
+Email:
+admin@email.com
+
+Password:
+password123
+
+Role:
+SUPER_ADMIN

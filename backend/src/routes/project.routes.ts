@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { getProjects, getProjectById, createProject, updateProject, updateProjectStatus, deleteProject, updateProjectProgress } from '../controllers/project.controller';
-import { updatePaymentTermin, createPaymentTermin, deletePaymentTermin, saveConceptPage, createScriptSegment, addScriptRow } from '../controllers/project-phase.controller';
+import { updatePaymentTermin, createPaymentTermin, deletePaymentTermin, saveConceptPage, createScriptSegment, addScriptRow, getPaymentTerminById } from '../controllers/project-phase.controller';
 import { getTasks, createTask, updateTask, deleteTask } from '../controllers/task.controller';
 import { getUploadLinks, createUploadLink, deleteUploadLink, oembedProxy } from '../controllers/uploadLink.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
 
 const router = Router();
+
+// Public routes (must be before authenticateToken)
+router.get('/payments/public/:terminId', getPaymentTerminById);
 
 router.use(authenticateToken);
 

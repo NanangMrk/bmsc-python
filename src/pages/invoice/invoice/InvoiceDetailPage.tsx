@@ -193,7 +193,7 @@ export default function InvoiceDetailPage() {
           <ArrowLeft className="h-4 w-4" /> Kembali ke Aplikasi
         </button>
         <div className="flex items-center gap-2.5">
-          {invoice.shareToken && hasInvCopyLink && (
+          {hasInvCopyLink && (
             <Button 
               variant="outline" 
               size="sm" 

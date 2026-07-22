@@ -21,6 +21,7 @@ import RateCardPage from '@/pages/ratecard/RateCardPage'
 import PublicRateCardPage from '@/pages/ratecard/PublicRateCardPage'
 import PublicInvoicePage from '@/pages/invoice/invoice/PublicInvoicePage'
 import PublicQuotationPage from '@/pages/invoice/quotation/PublicQuotationPage'
+import PublicPaymentPage from '@/pages/projects/PublicPaymentPage'
 import FinancePage from '@/pages/finance/FinancePage'
 import UsersPage from '@/pages/users/UsersPage'
 import RolesPage from '@/pages/roles/RolesPage'
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/public/ratecard" element={<PublicRateCardPage />} />
           <Route path="/public/quotation/:id" element={<PublicQuotationPage />} />
           <Route path="/public/invoice/:id" element={<PublicInvoicePage />} />
+          <Route path="/public/payment/:id" element={<PublicPaymentPage />} />
 
           {/* Protected app routes */}
           <Route element={<AppLayout />}>
