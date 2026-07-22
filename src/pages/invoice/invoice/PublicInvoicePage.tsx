@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { Download, AlertCircle } from 'lucide-react'
-import { mockInvoices, mockProjects, mockPayments } from '@/lib/mock-data'
+// data fetched via API
 import { formatCurrency, formatDateShort } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { useQuery } from '@tanstack/react-query'

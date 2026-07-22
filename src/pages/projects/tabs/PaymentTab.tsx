@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, X, Pencil } from 'lucide-react'
-import { mockPayments } from '@/lib/mock-data'
+// data fetched via API
 import type { Project, Payment, PaymentStatus } from '@/lib/mock-data'
 import { formatCurrency, cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'

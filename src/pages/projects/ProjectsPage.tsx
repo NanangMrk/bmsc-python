@@ -14,21 +14,21 @@ import {
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { mockPlatforms, mockBrands, mockUsers } from '@/lib/mock-data'
+// data fetched via API
 import { StatusBadge } from '@/components/ui/StatusBadge'
-import { X, AlertCircle } from 'lucide-react'
-import { ProgressBar } from '@/components/ui/ProgressBar'
+import { X } from 'lucide-react'
+// ProgressBar not used
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 
 type ViewMode = 'table' | 'grid'
 
-const phaseLabels = ['', 'Payment', 'Pengiriman', 'Ide & Konsep', 'Script', 'Produksi', 'Upload']
+// phaseLabels not used
 
 export default function ProjectsPage() {
   const navigate = useNavigate()
-  const { hasPermission } = usePermissions()
+  const { hasPermission, canEdit } = usePermissions()
   const queryClient = useQueryClient()
   const [view, setView] = useState<ViewMode>('grid')
   const [search, setSearch] = useState('')
@@ -282,7 +282,7 @@ export default function ProjectsPage() {
                 className="h-9 pl-8 pr-8 appearance-none bg-transparent text-sm focus:outline-none w-44 cursor-pointer"
               >
                 <option value="ALL">Semua Platform</option>
-                {mockPlatforms.map((pl) => (
+                {platforms.map((pl: any) => (
                   <option key={pl.id} value={pl.id}>{pl.name}</option>
                 ))}
               </select>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Eye, X, Trash2, Sparkles, LayoutGrid, LayoutList, Calendar, FileText, Pencil } from 'lucide-react'
-import { mockQuotations } from '@/lib/mock-data'
+// data fetched via API
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -39,7 +39,7 @@ export default function QuotationListPage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [note, setNote] = useState('')
-  const [status, setStatus] = useState<'DRAFT' | 'TERKIRIM'>('DRAFT')
+  const [status, setStatus] = useState<'DRAFT' | 'TERKIRIM' | 'DISETUJUI'>('DRAFT')
   const [items, setItems] = useState<Array<{
     id: string
     name: string

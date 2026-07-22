@@ -64,6 +64,15 @@ export interface Payment {
   createdAt: string
   title?: string
   description?: string
+  billTo?: {
+    name?: string
+    companyName?: string
+    picName?: string
+    email?: string
+    phone?: string
+    address?: string
+    brand?: { name?: string }
+  }
 }
 
 export interface QuotationItem {

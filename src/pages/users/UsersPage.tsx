@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, Pencil, Trash2, Search, FolderKanban, X, Check, Users } from 'lucide-react'
-import { mockProjects, mockQuotations } from '@/lib/mock-data'
+// data fetched via API
 import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
 import { StatusBadge } from '@/components/ui/StatusBadge'

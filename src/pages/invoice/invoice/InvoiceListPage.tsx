@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Eye, LayoutGrid, LayoutList, Calendar, Clock, X, Sparkles, Pencil } from 'lucide-react'
-import { mockInvoices } from '@/lib/mock-data'
+// mock-data types used at runtime
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'

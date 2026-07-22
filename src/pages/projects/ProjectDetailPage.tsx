@@ -13,7 +13,7 @@ import {
   Trash2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth.store'
+// auth handled via usePermissions
 import { usePermissions } from '@/hooks/usePermissions'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -39,7 +39,7 @@ const phases = [
 export default function ProjectDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { hasPermission, canEdit } = usePermissions()
+  const { hasPermission } = usePermissions()
   const hasPhaseStatusPerm = hasPermission('proj_phase_status')
   const hasChatViewPerm = hasPermission('proj_chat_view')
 

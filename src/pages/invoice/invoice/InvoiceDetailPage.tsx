@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Upload, CheckCircle2, Download, Share2, Trash2 } from 'lucide-react'
-import { mockInvoices, mockProjects, mockQuotations } from '@/lib/mock-data'
+// data fetched via API
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDate, formatDateShort, cn } from '@/lib/utils'
@@ -28,7 +28,11 @@ export default function InvoiceDetailPage() {
     enabled: !!id
   })
 
-  const invoice = invoiceData
+  const [invoice, setInvoice] = useState<any>(null)
+
+  useEffect(() => {
+    if (invoiceData) setInvoice(invoiceData)
+  }, [invoiceData])
 
   const { data: settingsData } = useQuery({
     queryKey: ['settings'],
@@ -60,7 +64,7 @@ export default function InvoiceDetailPage() {
     }
   })
 
-  const project = null // mockProjects.find((p) => p.id === invoice?.projectId)
+  const project: any = null // project data from invoice if needed
 
   if (isLoading) {
     return <div className="p-8 text-center text-muted-foreground">Loading invoice...</div>
@@ -82,7 +86,7 @@ export default function InvoiceDetailPage() {
   const updateItem = (itemId: string, field: 'name' | 'qty' | 'price' | 'unit', value: string | number) => {
     setIsDirty(true)
     const items = invoice.items || []
-    const updatedItems = items.map(item => {
+    const updatedItems = items.map((item: any) => {
       if (item.id === itemId) {
         const updated = { ...item, [field]: value }
         if (field === 'qty' || field === 'price') {
@@ -95,7 +99,7 @@ export default function InvoiceDetailPage() {
     setInvoice({
       ...invoice,
       items: updatedItems,
-      total: updatedItems.reduce((sum, item) => sum + item.subtotal, 0)
+      total: updatedItems.reduce((sum: number, item: any) => sum + item.subtotal, 0)
     })
   }
 
@@ -114,18 +118,18 @@ export default function InvoiceDetailPage() {
     setInvoice({
       ...invoice,
       items: updatedItems,
-      total: updatedItems.reduce((sum, item) => sum + item.subtotal, 0)
+      total: updatedItems.reduce((sum: number, item: any) => sum + item.subtotal, 0)
     })
   }
 
   const removeItem = (itemId: string) => {
     setIsDirty(true)
     const items = invoice.items || []
-    const updatedItems = items.filter(item => item.id !== itemId)
+    const updatedItems = items.filter((item: any) => item.id !== itemId)
     setInvoice({
       ...invoice,
       items: updatedItems,
-      total: updatedItems.reduce((sum, item) => sum + item.subtotal, 0)
+      total: updatedItems.reduce((sum: number, item: any) => sum + item.subtotal, 0)
     })
   }
 
@@ -337,7 +341,7 @@ export default function InvoiceDetailPage() {
                   </thead>
                                     <tbody className="divide-y divide-gray-100 font-medium text-foreground print:text-black">
                     {(invoice.items && invoice.items.length > 0) ? (
-                      invoice.items.map((item) => (
+                      invoice.items.map((item: any) => (
                         <tr key={item.id} className="hover:bg-gray-50/30 print:bg-transparent">
                           <td className="px-5 py-3 font-bold text-foreground print:text-black/80 print:text-black">
                             {item.name}
