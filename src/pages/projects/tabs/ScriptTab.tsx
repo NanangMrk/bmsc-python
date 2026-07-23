@@ -234,15 +234,12 @@ export function ScriptTab({ project }: ScriptTabProps) {
 
     // Upload file to server
     try {
-      const token = localStorage.getItem('token')
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch(`${API_URL}/upload/single`, {
+      const data = await api<{ url: string }>('/upload/single', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: formData
       })
-      const data = await res.json()
       if (data.url) {
         setImageUrls(prev => ({ ...prev, [rowId]: `${BACKEND_URL}${data.url}` }))
       }
@@ -360,22 +357,12 @@ export function ScriptTab({ project }: ScriptTabProps) {
     }
     setIsSubmittingComment(true)
     try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`${API_URL}/projects/${project.id}/scripts/rows/${commentRowId.rowId}/comments`, {
+      const newComment = await api(`/projects/${project.id}/scripts/rows/${commentRowId.rowId}/comments`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ text: commentText.trim() }),
+        data: { text: commentText.trim() }
       })
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.message || 'Gagal mengirim komentar')
-      }
-
-      const savedComment: RowComment = await res.json()
+      const savedComment: RowComment = newComment
 
       // Update local state with saved comment from DB
       setPlatformSegments(prev => ({

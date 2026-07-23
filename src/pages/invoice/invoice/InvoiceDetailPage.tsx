@@ -151,19 +151,10 @@ export default function InvoiceDetailPage() {
     formData.append('file', file)
 
     try {
-      // NOTE: api helper might try to stringify if not careful, but it supports FormData natively if we don't pass headers
-      // Let's use standard fetch to be safe with FormData headers (boundary)
-      const token = localStorage.getItem('token')
-      const res = await fetch(`${API_URL}/upload/single`, {
+      const data = await api<{ url: string }>('/upload/single', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
         body: formData
       })
-      if (!res.ok) throw new Error('Upload failed')
-      
-      const data = await res.json()
       statusMutation.mutate({ status: 'MENUNGGU_VERIFIKASI', paymentProof: data.url })
     } catch (err: any) {
       alert("Gagal upload: " + err.message)

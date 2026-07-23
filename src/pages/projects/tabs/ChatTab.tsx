@@ -65,15 +65,12 @@ export function ChatTab({ project }: ChatTabProps) {
 
     try {
       setIsUploading(true)
-      const token = localStorage.getItem('token')
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch(`${API_URL}/upload/single`, {
+      const data = await api<{ url: string }>('/upload/single', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: formData
       })
-      const data = await res.json()
       if (data.url) {
         // Send a message with the attachment immediately
         sendMessageMutation.mutate({ message: 'Mengirim file lampiran', attachment: `${BACKEND_URL}${data.url}` })

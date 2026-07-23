@@ -49,32 +49,18 @@ async function fetchLinkMeta(url: string): Promise<{ title: string; thumbnail: s
   if (ytId) {
     const thumbnail = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`
     try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(
-        `${API_URL}/projects/oembed-proxy?url=${encodeURIComponent(url)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      if (res.ok) {
-        const data = await res.json()
-        return { title: data.title || `YouTube — ${ytId}`, thumbnail }
-      }
+      const data = await api<{ title?: string }>(`/projects/oembed-proxy?url=${encodeURIComponent(url)}`)
+      return { title: data.title || `YouTube — ${ytId}`, thumbnail }
     } catch {}
     return { title: `YouTube — ${ytId}`, thumbnail }
   }
 
   // TikTok, Instagram, atau lainnya — semua via backend proxy (tidak ada CORS)
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(
-      `${API_URL}/projects/oembed-proxy?url=${encodeURIComponent(url)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-    if (res.ok) {
-      const data = await res.json()
-      const title = data.title || data.author_name || url.split('/').pop() || url
-      const thumbnail = data.thumbnail_url || null
-      return { title, thumbnail }
-    }
+    const data = await api<{ title?: string; author_name?: string; thumbnail_url?: string }>(`/projects/oembed-proxy?url=${encodeURIComponent(url)}`)
+    const title = data.title || data.author_name || url.split('/').pop() || url
+    const thumbnail = data.thumbnail_url || null
+    return { title, thumbnail }
   } catch {}
 
   // Fallback: gunakan slug URL sebagai judul

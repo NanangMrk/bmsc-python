@@ -41,15 +41,12 @@ export function ShipmentTab({ project: _project }: ShipmentTabProps) {
   })
 
   const uploadFile = async (file: File) => {
-    const token = localStorage.getItem('token')
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch(`${API_URL}/upload/single`, {
+    const data = await api<{ url: string }>('/upload/single', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
       body: formData
     })
-    const data = await res.json()
     return data.url ? `${BACKEND_URL}${data.url}` : null
   }
 
